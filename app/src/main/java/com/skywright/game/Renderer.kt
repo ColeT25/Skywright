@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
 import android.graphics.Typeface
+import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -34,12 +35,12 @@ class Renderer {
         canvas.translate((canvas.width - GameCore.WIDTH * scale) / 2f, (canvas.height - GameCore.HEIGHT * scale) / 2f)
         canvas.scale(scale, scale)
 
-        drawSky(canvas, ambient)
+        drawSky(canvas, ambient, core.dawnProgress())
         drawHorizon(canvas, ambient)
         core.walls.forEach { drawWall(canvas, core, it, ambient) }
         drawGuideAndPulses(canvas, core, ambient)
         core.sparks.forEach { spark ->
-            fill(cyan, (spark.life * 300).toInt().coerceIn(0, 255))
+            fill(if (spark.warm) coral else cyan, (spark.life * 300).toInt().coerceIn(0, 255))
             canvas.drawCircle(spark.x, spark.y, 1.7f + spark.life * 2f, paint)
         }
         drawMoth(canvas, core, ambient)
@@ -49,34 +50,57 @@ class Renderer {
             GamePhase.READY -> drawReady(canvas, core, soundOn, vibrationOn, ambient)
             GamePhase.PAUSED -> drawPaused(canvas, soundOn, vibrationOn)
             GamePhase.OVER -> drawOver(canvas, core, soundOn, vibrationOn)
+            GamePhase.WON -> drawWon(canvas, core, soundOn, vibrationOn)
             GamePhase.PLAYING -> Unit
         }
         canvas.restore()
     }
 
-    private fun drawSky(canvas: Canvas, ambient: Float) {
+    private fun drawSky(canvas: Canvas, ambient: Float, progress: Float) {
         paint.style = Paint.Style.FILL
         paint.alpha = 255
         paint.shader = LinearGradient(0f, 0f, 0f, 720f,
-            intArrayOf(Color.rgb(11, 22, 54), Color.rgb(31, 45, 88), Color.rgb(87, 70, 107), Color.rgb(180, 103, 116)),
+            intArrayOf(
+                blend(Color.rgb(11, 22, 54), Color.rgb(69, 139, 200), progress),
+                blend(Color.rgb(31, 45, 88), Color.rgb(115, 173, 218), progress),
+                blend(Color.rgb(87, 70, 107), Color.rgb(224, 174, 173), progress),
+                blend(Color.rgb(180, 103, 116), Color.rgb(255, 199, 137), progress),
+            ),
             null, Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, 360f, 720f, paint)
         paint.shader = null
 
         stars.forEachIndexed { index, (sx, sy, radius) ->
             val x = (sx - ambient * (2f + index % 4) + 3600f) % 360f
-            val twinkle = (150 + 75 * sin(ambient * 2f + index)).toInt().coerceIn(60, 230)
+            val twinkle = ((150 + 75 * sin(ambient * 2f + index)) * (1f - progress * 0.9f)).toInt().coerceIn(0, 230)
             fill(cream, twinkle)
             canvas.drawCircle(x, sy, radius, paint)
         }
 
-        // A stationary moon gives the moving paper skyline depth.
-        fill(cream, 26)
-        canvas.drawCircle(284f, 176f, 61f, paint)
-        fill(cream, 215)
-        canvas.drawCircle(284f, 176f, 39f, paint)
-        fill(coral, 52)
-        canvas.drawCircle(296f, 166f, 38f, paint)
+        val sunX = 286f - 30f * sin(progress * 1.570796f)
+        val sunY = 690f - 510f * progress
+        fill(gold, 42)
+        canvas.drawCircle(sunX, sunY, 68f, paint)
+        fill(coral, 54)
+        canvas.drawCircle(sunX, sunY, 54f, paint)
+        stroke(gold, (progress * 145f).toInt().coerceIn(0, 145), 2f)
+        for (index in 0 until 12) {
+            val angle = index * 6.283185f / 12f + ambient * 0.07f
+            val dx = cos(angle)
+            val dy = sin(angle)
+            canvas.drawLine(sunX + dx * 48f, sunY + dy * 48f, sunX + dx * 57f, sunY + dy * 57f, paint)
+        }
+        fill(cream, 185 + (progress * 70).toInt())
+        canvas.drawCircle(sunX, sunY, 37f, paint)
+    }
+
+    private fun blend(a: Int, b: Int, t: Float): Int {
+        val p = t.coerceIn(0f, 1f)
+        return Color.rgb(
+            (Color.red(a) + (Color.red(b) - Color.red(a)) * p).toInt(),
+            (Color.green(a) + (Color.green(b) - Color.green(a)) * p).toInt(),
+            (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * p).toInt(),
+        )
     }
 
     private fun drawHorizon(canvas: Canvas, ambient: Float) {
@@ -105,12 +129,18 @@ class Renderer {
         val gap = wall.gapCenter
         if (gap == null) {
             drawPaperPanel(canvas, x, GameCore.TOP, GameCore.BOTTOM, false, false)
-            // The dotted outline makes it clear that a doorway has yet to be made.
-            stroke(cyan, 100, 1.5f)
-            val preview = 160f
-            canvas.drawRoundRect(x + 8f, preview, x + GameCore.WALL_WIDTH - 8f, preview + 28f, 8f, 8f, paint)
-            fill(cyan, 185)
-            canvas.drawCircle(x + GameCore.WALL_WIDTH / 2f, preview + 14f, 3f, paint)
+            val weakTop = wall.weakCenter - wall.weakHalfHeight
+            val weakBottom = wall.weakCenter + wall.weakHalfHeight
+            val targetColor = if (wall.missAge > 0f) coral else cyan
+            fill(targetColor, if (wall.missAge > 0f) 110 else 58)
+            canvas.drawRect(x + 4f, weakTop, x + GameCore.WALL_WIDTH - 4f, weakBottom, paint)
+            stroke(targetColor, 235, 2.5f)
+            canvas.drawLine(x - 4f, weakTop, x + GameCore.WALL_WIDTH + 4f, weakTop, paint)
+            canvas.drawLine(x - 4f, weakBottom, x + GameCore.WALL_WIDTH + 4f, weakBottom, paint)
+            fill(targetColor, 220)
+            canvas.drawCircle(x + GameCore.WALL_WIDTH / 2f, wall.weakCenter, 6f, paint)
+            fill(dark)
+            canvas.drawCircle(x + GameCore.WALL_WIDTH / 2f, wall.weakCenter, 2.5f, paint)
         } else {
             val half = core.gapHeight(wall) / 2f
             val upper = gap - half
@@ -201,7 +231,14 @@ class Renderer {
     }
 
     private fun drawHud(canvas: Canvas, core: GameCore) {
-        label(canvas, "${core.score}", 180f, 41f, 31f, cream, titleFace)
+        label(canvas, "DAWN", 47f, 22f, 10f, cyan, bodyFace)
+        val seconds = core.secondsToDawn()
+        label(canvas, "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}", 47f, 43f, 17f, cream, titleFace)
+        label(canvas, "${core.score}", 180f, 35f, 29f, cream, titleFace)
+        fill(cream, 45)
+        canvas.drawRoundRect(108f, 47f, 272f, 52f, 3f, 3f, paint)
+        fill(gold)
+        canvas.drawRoundRect(108f, 47f, 108f + 164f * core.dawnProgress(), 52f, 3f, 3f, paint)
         if (core.phase == GamePhase.PLAYING) {
             stroke(cream, 210, 2.5f)
             canvas.drawLine(316f, 19f, 316f, 39f, paint)
@@ -219,12 +256,13 @@ class Renderer {
         label(canvas, "CUT YOUR OWN WAY THROUGH", 180f, 271f, 13f, cyan, bodyFace)
         drawTinyGate(canvas, 180f, 337f, ambient)
         label(canvas, "TAP TO FLAP", 180f, 419f, 23f, cream, titleFace)
-        label(canvas, "Each flap carves the next wall", 180f, 447f, 15f, cream, bodyFace)
-        label(canvas, "at your moth's height.", 180f, 468f, 15f, cream, bodyFace)
+        label(canvas, "Hit the wall's glowing band", 180f, 447f, 15f, cream, bodyFace)
+        label(canvas, "to carve a doorway.", 180f, 468f, 15f, cream, bodyFace)
         fill(coral)
         canvas.drawRoundRect(74f, 494f, 286f, 535f, 20f, 20f, paint)
         label(canvas, "TAP TO BEGIN", 180f, 521f, 17f, dark, titleFace)
         drawToggles(canvas, soundOn, vibrationOn)
+        label(canvas, "SURVIVE TO SUNRISE  •  5 MIN", 180f, 581f, 13f, gold, bodyFace)
         label(canvas, "BEST  ${core.best}", 180f, 604f, 14f, cream, bodyFace)
     }
 
@@ -252,9 +290,26 @@ class Renderer {
         label(canvas, "YOU FLEW THROUGH", 180f, 301f, 13f, cyan, bodyFace)
         label(canvas, "${core.score}", 180f, 377f, 72f, gold, titleFace)
         label(canvas, "WALLS     •     BEST  ${core.best}", 180f, 410f, 14f, cream, bodyFace)
+        label(canvas, "SUNRISE  ${(core.dawnProgress() * 100f).toInt()}%", 180f, 437f, 13f, gold, bodyFace)
         fill(coral)
         canvas.drawRoundRect(74f, 458f, 286f, 505f, 23f, 23f, paint)
         label(canvas, "TAP TO FLY AGAIN", 180f, 489f, 18f, dark, titleFace)
+        drawToggles(canvas, soundOn, vibrationOn)
+    }
+
+    private fun drawWon(canvas: Canvas, core: GameCore, soundOn: Boolean, vibrationOn: Boolean) {
+        shade(canvas)
+        fill(midnight, 238)
+        canvas.drawRoundRect(30f, 192f, 330f, 528f, 24f, 24f, paint)
+        stroke(gold, 220, 2.5f)
+        canvas.drawRoundRect(30f, 192f, 330f, 528f, 24f, 24f, paint)
+        label(canvas, "DAYBREAK", 180f, 263f, 40f, gold, titleFace)
+        label(canvas, "YOU WON THE SKY", 180f, 303f, 15f, cyan, bodyFace)
+        label(canvas, "${core.score}", 180f, 379f, 72f, cream, titleFace)
+        label(canvas, "WALLS CLEARED  •  5:00", 180f, 413f, 14f, cream, bodyFace)
+        fill(coral)
+        canvas.drawRoundRect(74f, 458f, 286f, 505f, 23f, 23f, paint)
+        label(canvas, "FLY AGAIN", 180f, 489f, 18f, dark, titleFace)
         drawToggles(canvas, soundOn, vibrationOn)
     }
 

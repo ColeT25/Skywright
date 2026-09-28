@@ -2,10 +2,11 @@ package com.skywright.game
 
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.abs
 import kotlin.random.Random
 
-enum class GamePhase { READY, PLAYING, PAUSED, OVER }
-enum class GameEvent { FLAP, OPEN, SCORE, HIT }
+enum class GamePhase { READY, PLAYING, PAUSED, OVER, WON }
+enum class GameEvent { FLAP, OPEN, MISS, SCORE, HIT, WIN }
 
 data class Wall(
     val id: Int,
@@ -14,13 +15,17 @@ data class Wall(
     var pulsePending: Boolean = false,
     var scored: Boolean = false,
     var openAge: Float = 0f,
+    val weakCenter: Float = 350f,
+    val weakHalfHeight: Float = 80f,
+    val openingHeight: Float = 164f,
+    var missAge: Float = 0f,
 )
 
 data class Pulse(val targetId: Int, var x: Float, val y: Float)
-data class Spark(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float)
+data class Spark(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val warm: Boolean = false)
 
 /** Android-free fixed-step simulation. All mutations occur on the View's UI thread. */
-class GameCore(private val random: Random = Random(19)) {
+class GameCore(private val random: Random = Random(19), private val winSeconds: Float = 300f) {
     companion object {
         const val WIDTH = 360f
         const val HEIGHT = 720f
@@ -33,6 +38,8 @@ class GameCore(private val random: Random = Random(19)) {
         const val GRAVITY = 850f
         const val FLAP_SPEED = -280f
     }
+
+    init { require(winSeconds > 0f) }
 
     var phase = GamePhase.READY
         private set
@@ -60,6 +67,10 @@ class GameCore(private val random: Random = Random(19)) {
 
     init { reset() }
 
+    fun dawnProgress(): Float = (elapsed / winSeconds).coerceIn(0f, 1f)
+    fun wallSpeed(): Float = 120f + 90f * dawnProgress()
+    fun secondsToDawn(): Int = kotlin.math.ceil((winSeconds - elapsed).coerceAtLeast(0f)).toInt()
+
     fun reset() {
         phase = GamePhase.READY
         birdY = 350f
@@ -72,7 +83,10 @@ class GameCore(private val random: Random = Random(19)) {
         sparks.clear()
         events.clear()
         nextWallId = 0
-        repeat(3) { walls += Wall(nextWallId++, 340f + it * 310f) }
+        val introCenters = floatArrayOf(350f, 392f, 328f)
+        repeat(3) { index ->
+            walls += Wall(nextWallId++, 340f + index * 310f, weakCenter = introCenters[index])
+        }
     }
 
     fun start() {
@@ -94,7 +108,7 @@ class GameCore(private val random: Random = Random(19)) {
         if (phase == GamePhase.PAUSED) phase = GamePhase.PLAYING
     }
 
-    /** A flap always moves the moth. It cuts the earliest on-screen wall not already claimed. */
+    /** A flap always moves the moth. Its pulse can cut the first visible unclaimed weak band. */
     fun flap() {
         if (phase != GamePhase.PLAYING) return
         birdVy = FLAP_SPEED
@@ -117,10 +131,11 @@ class GameCore(private val random: Random = Random(19)) {
         birdVy = min(430f, birdVy + GRAVITY * dt)
         birdY += birdVy * dt
 
-        val speed = min(184f, 120f + 8f * (score / 5))
+        val speed = wallSpeed()
         walls.forEach { wall ->
             wall.x -= speed * dt
             if (wall.gapCenter != null) wall.openAge += dt
+            wall.missAge = max(0f, wall.missAge - dt)
         }
 
         val pulseIterator = pulses.iterator()
@@ -132,12 +147,18 @@ class GameCore(private val random: Random = Random(19)) {
                 pulseIterator.remove()
             } else if (pulse.x >= wall.x) {
                 if (wall.x > BIRD_X + BIRD_RADIUS && wall.gapCenter == null) {
-                    val halfGap = gapHeight(wall) / 2f
-                    wall.gapCenter = pulse.y.coerceIn(TOP + halfGap + 16f, BOTTOM - halfGap - 16f)
-                    wall.openAge = 0f
-                    lastCutY = wall.gapCenter!!
-                    burst(wall.x, wall.gapCenter!!)
-                    events += GameEvent.OPEN
+                    if (abs(pulse.y - wall.weakCenter) <= wall.weakHalfHeight) {
+                        val halfGap = gapHeight(wall) / 2f
+                        wall.gapCenter = pulse.y.coerceIn(TOP + halfGap + 16f, BOTTOM - halfGap - 16f)
+                        wall.openAge = 0f
+                        lastCutY = wall.gapCenter!!
+                        burst(wall.x, wall.gapCenter!!)
+                        events += GameEvent.OPEN
+                    } else {
+                        wall.missAge = 0.42f
+                        burst(wall.x, pulse.y.coerceIn(TOP, BOTTOM), warm = true)
+                        events += GameEvent.MISS
+                    }
                 }
                 wall.pulsePending = false
                 pulseIterator.remove()
@@ -168,13 +189,23 @@ class GameCore(private val random: Random = Random(19)) {
         }
         walls.removeAll { it.x + WALL_WIDTH < -40f }
         while (walls.last().x < WIDTH + 560f) {
-            // Small deterministic variation keeps the cadence alive without creating surprise gaps.
             val spacing = 300f + random.nextInt(0, 3) * 18f
-            walls += Wall(nextWallId++, walls.last().x + spacing)
+            val center = (walls.last().weakCenter + random.nextInt(-68, 69)).coerceIn(TOP + 120f, BOTTOM - 120f)
+            val progress = dawnProgress()
+            walls += Wall(
+                nextWallId++, walls.last().x + spacing,
+                weakCenter = center,
+                weakHalfHeight = 80f - 44f * progress,
+                openingHeight = 164f - 32f * progress,
+            )
+        }
+        if (elapsed >= winSeconds) {
+            phase = GamePhase.WON
+            events += GameEvent.WIN
         }
     }
 
-    fun gapHeight(wall: Wall): Float = if (wall.id < 3) 164f else 148f
+    fun gapHeight(wall: Wall): Float = wall.openingHeight
 
     private fun hitsWall(wall: Wall): Boolean {
         val left = wall.x
@@ -195,7 +226,7 @@ class GameCore(private val random: Random = Random(19)) {
         return dx * dx + dy * dy < radius * radius
     }
 
-    private fun burst(x: Float, y: Float) {
+    private fun burst(x: Float, y: Float, warm: Boolean = false) {
         repeat(14) { index ->
             val angle = index * 6.283185f / 14f
             val force = 55f + random.nextFloat() * 105f
@@ -204,6 +235,7 @@ class GameCore(private val random: Random = Random(19)) {
                 kotlin.math.cos(angle) * force,
                 kotlin.math.sin(angle) * force,
                 0.4f + random.nextFloat() * 0.45f,
+                warm,
             )
         }
     }

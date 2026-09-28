@@ -29,6 +29,19 @@ class GameCoreTest {
         assertFalse(first.pulsePending)
     }
 
+    @Test fun aPulseOutsideTheWeakBandDoesNotOpenTheWallAndCanBeRetried() {
+        val game = GameCore()
+        game.walls.clear()
+        game.walls += Wall(99, 340f, weakCenter = 500f, weakHalfHeight = 30f)
+        game.start()
+        repeat(25) { game.update(1f / 60f) }
+        assertEquals(null, game.walls.first().gapCenter)
+        assertTrue(GameEvent.MISS in game.events)
+        assertFalse(game.walls.first().pulsePending)
+        game.flap()
+        assertEquals(99, game.pulses.single().targetId)
+    }
+
     @Test fun pulseThatArrivesAfterWallIsTooCloseCannotSaveBird() {
         val game = GameCore()
         game.walls.clear()
@@ -64,14 +77,54 @@ class GameCoreTest {
         assertTrue(GameEvent.HIT in game.events)
     }
 
-    @Test fun aSteadyFlapRhythmCanClearSeveralWalls() {
+    @Test fun aimingAtVisibleWeakBandsCanClearSeveralWalls() {
         val game = GameCore()
         game.start()
+        var failureState = ""
         repeat(600) { frame ->
-            if (frame > 0 && frame % 40 == 0) game.flap()
+            val target = game.walls.firstOrNull {
+                it.x + GameCore.WALL_WIDTH >= GameCore.BIRD_X - GameCore.BIRD_RADIUS && it.x <= GameCore.WIDTH
+            }
+            val desiredY = target?.gapCenter ?: target?.weakCenter ?: 350f
+            if (frame > 0 && game.birdY > desiredY + 8f && game.birdVy > 0f) game.flap()
             game.update(1f / 60f)
+            if (game.phase == GamePhase.OVER && failureState.isEmpty()) {
+                val wall = game.walls.firstOrNull { it.x + GameCore.WALL_WIDTH >= GameCore.BIRD_X - GameCore.BIRD_RADIUS }
+                failureState = "frame=$frame score=${game.score} y=${game.birdY} wall=$wall"
+            }
         }
-        assertEquals(GamePhase.PLAYING, game.phase)
+        assertEquals(failureState, GamePhase.PLAYING, game.phase)
         assertTrue(game.score >= 3)
+    }
+
+    @Test fun sunriseAdvancesWithPlayTimeAndEndsTheRunAtFiveMinuteEquivalent() {
+        val game = GameCore(winSeconds = 0.5f)
+        game.start()
+        repeat(30) { game.update(1f / 60f) }
+        assertEquals(GamePhase.WON, game.phase)
+        assertEquals(1f, game.dawnProgress(), 0.001f)
+        assertEquals(210f, game.wallSpeed(), 0.001f)
+        assertTrue(GameEvent.WIN in game.events)
+    }
+
+    @Test fun aGuidedRouteCanReachTheActualFiveMinuteSunrise() {
+        val game = GameCore()
+        game.start()
+        var failureState = ""
+        repeat(18_100) { frame ->
+            if (game.phase == GamePhase.PLAYING) {
+                val wall = game.walls.firstOrNull {
+                    it.x + GameCore.WALL_WIDTH >= GameCore.BIRD_X - GameCore.BIRD_RADIUS && it.x <= GameCore.WIDTH
+                }
+                val desiredY = wall?.gapCenter ?: wall?.weakCenter ?: 350f
+                if (frame > 0 && game.birdY > desiredY + 8f && game.birdVy > 0f) game.flap()
+                game.update(1f / 60f)
+                if (game.phase == GamePhase.OVER) {
+                    failureState = "frame=$frame score=${game.score} y=${game.birdY} wall=$wall"
+                }
+            }
+        }
+        assertEquals(failureState, GamePhase.WON, game.phase)
+        assertTrue(game.score > 100)
     }
 }

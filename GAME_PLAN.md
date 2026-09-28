@@ -83,6 +83,10 @@ Before handoff, confirm the APK exists, its checksum is recorded, and it install
 
 One endless mode, one-thumb controls, score and best score, local settings, a brief tutorial, and a signed APK. Additional modes, cosmetics, online rankings, purchases, and procedural themes can be considered after the central flap-and-cut loop is fun and the first APK is working.
 
+## Version 1.1 addendum: Dawn
+
+The original endless scoring loop became a five-minute survival ascent. A visible breakable band turns each wall into an aiming challenge. A tap samples the moth's height and sends a pulse toward the earliest closed wall; the wall opens only when the sampled height lies inside its band. A miss gives immediate red feedback and permits another attempt. As the sun rises, new bands and doorways narrow and wall speed increases. Existing walls keep their spawned geometry. Survive one continuous run until the sun reaches its highest point to win; score remains an additional measure of how far you flew.
+
 ## Android documentation used for the implementation path
 
 - [Build and install APKs from the command line](https://developer.android.com/build/building-cmdline) — debug APKs, release signing, and device installation.

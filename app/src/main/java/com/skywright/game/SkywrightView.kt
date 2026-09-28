@@ -111,6 +111,7 @@ class SkywrightView(context: Context) : View(context), Choreographer.FrameCallba
             GamePhase.PLAYING -> if (x > 292f && y < GameCore.TOP) core.pause() else core.flap()
             GamePhase.PAUSED -> core.resume()
             GamePhase.OVER -> core.restart()
+            GamePhase.WON -> core.restart()
         }
         drainEvents()
         invalidate()
@@ -128,8 +129,8 @@ class SkywrightView(context: Context) : View(context), Choreographer.FrameCallba
         if (core.events.isEmpty()) return
         core.events.forEach { event ->
             audio.play(event, soundOn)
-            if (vibrationOn && (event == GameEvent.FLAP || event == GameEvent.HIT)) {
-                performHapticFeedback(if (event == GameEvent.HIT) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP)
+            if (vibrationOn && (event == GameEvent.FLAP || event == GameEvent.HIT || event == GameEvent.WIN)) {
+                performHapticFeedback(if (event == GameEvent.HIT || event == GameEvent.WIN) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP)
             }
             if (event == GameEvent.SCORE) prefs.edit().putInt("best", core.best).apply()
         }

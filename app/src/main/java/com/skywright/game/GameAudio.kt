@@ -12,18 +12,21 @@ class GameAudio {
         val tone = when (event) {
             GameEvent.FLAP -> ToneGenerator.TONE_DTMF_2
             GameEvent.OPEN -> ToneGenerator.TONE_DTMF_6
+            GameEvent.MISS -> ToneGenerator.TONE_PROP_NACK
             GameEvent.SCORE -> ToneGenerator.TONE_DTMF_8
             GameEvent.HIT -> ToneGenerator.TONE_PROP_NACK
+            GameEvent.WIN -> ToneGenerator.TONE_DTMF_9
         }
         val duration = when (event) {
             GameEvent.FLAP -> 45
             GameEvent.OPEN -> 80
+            GameEvent.MISS -> 70
             GameEvent.SCORE -> 110
             GameEvent.HIT -> 180
+            GameEvent.WIN -> 260
         }
         tones?.startTone(tone, duration)
     }
 
     fun release() = tones?.release() ?: Unit
 }
-
