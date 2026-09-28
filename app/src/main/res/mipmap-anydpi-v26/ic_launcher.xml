@@ -1,0 +1,6 @@
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/icon_background" />
+    <foreground android:drawable="@drawable/ic_moth" />
+    <monochrome android:drawable="@drawable/ic_moth_mono" />
+</adaptive-icon>
+
