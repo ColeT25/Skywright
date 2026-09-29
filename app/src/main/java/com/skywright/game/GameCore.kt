@@ -6,7 +6,7 @@ import kotlin.math.abs
 import kotlin.random.Random
 
 enum class GamePhase { READY, PLAYING, PAUSED, OVER, WON }
-enum class GameEvent { FLAP, OPEN, MISS, SCORE, HIT, WIN }
+enum class GameEvent { FLAP, FIRE, OPEN, MISS, SCORE, HIT, WIN }
 
 data class Wall(
     val id: Int,
@@ -37,6 +37,10 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         const val PULSE_SPEED = 520f
         const val GRAVITY = 850f
         const val FLAP_SPEED = -280f
+        const val HOLD_SECONDS = 0.18f
+        const val SHOT_COOLDOWN = 0.9f
+        const val GLIDE_GRAVITY = 300f
+        const val GLIDE_FALL_LIMIT = 135f
     }
 
     init { require(winSeconds > 0f) }
@@ -58,6 +62,12 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         private set
     var lastCutY = 350f
         private set
+    var gliding = false
+        private set
+    var shotCooldown = 0f
+        private set
+    private var pressed = false
+    private var pressTime = 0f
 
     val walls = mutableListOf<Wall>()
     val pulses = mutableListOf<Pulse>()
@@ -78,6 +88,10 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         score = 0
         elapsed = 0f
         guideLife = 0f
+        pressed = false
+        gliding = false
+        pressTime = 0f
+        shotCooldown = 0f
         walls.clear()
         pulses.clear()
         sparks.clear()
@@ -85,7 +99,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         nextWallId = 0
         val introCenters = floatArrayOf(350f, 392f, 328f)
         repeat(3) { index ->
-            walls += Wall(nextWallId++, 340f + index * 310f, weakCenter = introCenters[index])
+            walls += Wall(nextWallId++, 340f + index * 400f, weakCenter = introCenters[index])
         }
     }
 
@@ -101,34 +115,83 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
     }
 
     fun pause() {
-        if (phase == GamePhase.PLAYING) phase = GamePhase.PAUSED
+        if (phase == GamePhase.PLAYING) {
+            cancelPress()
+            phase = GamePhase.PAUSED
+        }
     }
 
     fun resume() {
         if (phase == GamePhase.PAUSED) phase = GamePhase.PLAYING
     }
 
-    /** A flap always moves the moth. Its pulse can cut the first visible unclaimed weak band. */
+    /** A touch starts with a flap; after the hold threshold it becomes a glide. */
+    fun beginPress() {
+        if (pressed || phase == GamePhase.PAUSED) return
+        when (phase) {
+            GamePhase.READY -> start()
+            GamePhase.OVER, GamePhase.WON -> restart()
+            GamePhase.PLAYING -> flap()
+            GamePhase.PAUSED -> return
+        }
+        pressed = true
+        pressTime = 0f
+        gliding = false
+    }
+
+    /** The touch duration is supplied by Android so short, dropped frames do not misclassify a hold. */
+    fun endPress(heldSeconds: Float) {
+        if (!pressed) return
+        val wasGlide = phase == GamePhase.PLAYING && (gliding || heldSeconds >= HOLD_SECONDS)
+        cancelPress()
+        if (wasGlide) fire()
+    }
+
+    fun cancelPress() {
+        pressed = false
+        pressTime = 0f
+        gliding = false
+    }
+
+    /** Quick taps and the start of holds move the moth without spending a shot. */
     fun flap() {
         if (phase != GamePhase.PLAYING) return
         birdVy = FLAP_SPEED
+        events += GameEvent.FLAP
+    }
+
+    fun targetWall(): Wall? = walls.firstOrNull {
+        it.x > BIRD_X + BIRD_RADIUS && it.x <= WIDTH && it.gapCenter == null
+    }
+
+    fun canFire(): Boolean = phase == GamePhase.PLAYING && shotCooldown <= 0f &&
+        pulses.isEmpty() && targetWall()?.pulsePending == false
+
+    private fun fire() {
+        if (!canFire()) return
+        val target = targetWall() ?: return
+        target.pulsePending = true
+        pulses += Pulse(target.id, BIRD_X + 14f, birdY)
         guideY = birdY
         guideLife = 0.8f
-        val target = walls.firstOrNull {
-            it.x > BIRD_X + BIRD_RADIUS && it.x <= WIDTH && it.gapCenter == null && !it.pulsePending
-        }
-        if (target != null) {
-            target.pulsePending = true
-            pulses += Pulse(target.id, BIRD_X + 14f, birdY)
-        }
-        events += GameEvent.FLAP
+        shotCooldown = SHOT_COOLDOWN
+        events += GameEvent.FIRE
     }
 
     fun update(dt: Float) {
         if (phase != GamePhase.PLAYING || dt <= 0f) return
         elapsed += dt
         guideLife = max(0f, guideLife - dt)
-        birdVy = min(430f, birdVy + GRAVITY * dt)
+        shotCooldown = max(0f, shotCooldown - dt)
+        if (pressed && !gliding) {
+            pressTime += dt
+            if (pressTime >= HOLD_SECONDS) {
+                gliding = true
+                birdVy = max(birdVy, -105f)
+            }
+        }
+        birdVy = min(if (gliding) GLIDE_FALL_LIMIT else 430f,
+            birdVy + (if (gliding) GLIDE_GRAVITY else GRAVITY) * dt)
         birdY += birdVy * dt
 
         val speed = wallSpeed()
@@ -174,6 +237,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         sparks.removeAll { it.life <= 0f }
 
         if (birdY - BIRD_RADIUS < TOP || birdY + BIRD_RADIUS > BOTTOM || walls.any(::hitsWall)) {
+            cancelPress()
             phase = GamePhase.OVER
             events += GameEvent.HIT
             return
@@ -189,7 +253,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         }
         walls.removeAll { it.x + WALL_WIDTH < -40f }
         while (walls.last().x < WIDTH + 560f) {
-            val spacing = 300f + random.nextInt(0, 3) * 18f
+            val spacing = 390f + random.nextInt(0, 3) * 18f
             val center = (walls.last().weakCenter + random.nextInt(-68, 69)).coerceIn(TOP + 120f, BOTTOM - 120f)
             val progress = dawnProgress()
             walls += Wall(
@@ -200,6 +264,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
             )
         }
         if (elapsed >= winSeconds) {
+            cancelPress()
             phase = GamePhase.WON
             events += GameEvent.WIN
         }

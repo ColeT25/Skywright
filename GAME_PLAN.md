@@ -87,6 +87,10 @@ One endless mode, one-thumb controls, score and best score, local settings, a br
 
 The original endless scoring loop became a five-minute survival ascent. A visible breakable band turns each wall into an aiming challenge. A tap samples the moth's height and sends a pulse toward the earliest closed wall; the wall opens only when the sampled height lies inside its band. A miss gives immediate red feedback and permits another attempt. As the sun rises, new bands and doorways narrow and wall speed increases. Existing walls keep their spawned geometry. Survive one continuous run until the sun reaches its highest point to win; score remains an additional measure of how far you flew.
 
+## Version 1.2 addendum: Glide and release
+
+Quick taps still flap. Every touch starts with a flap; after 0.18 seconds of holding, the moth unfolds its wings and glides with lower gravity and a slower fall limit. A live dashed guide tracks the moth's height and changes color when it lines up with the nearest closed wall's breakable band. Releasing after a glide fires one horizontal burst at the moth's release height. A quick tap never fires. Shots have a 0.9-second cooldown, and only one burst can be in flight. A hold can still be used for movement when no shot is available. Walls are spaced farther apart to give players time to aim and recover as the sunrise accelerates the game. Future obstacle types can make the choice between flapping and gliding more varied without changing these controls.
+
 ## Android documentation used for the implementation path
 
 - [Build and install APKs from the command line](https://developer.android.com/build/building-cmdline) — debug APKs, release signing, and device installation.

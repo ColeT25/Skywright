@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.Shader
 import android.graphics.Typeface
 import kotlin.math.cos
+import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -186,6 +187,24 @@ class Renderer {
     }
 
     private fun drawGuideAndPulses(canvas: Canvas, core: GameCore, ambient: Float) {
+        if (core.gliding && core.phase == GamePhase.PLAYING) {
+            val target = core.targetWall()
+            val ready = core.canFire()
+            val aligned = target != null && abs(core.birdY - target.weakCenter) <= target.weakHalfHeight
+            val aimColor = if (!ready) cream else if (aligned) cyan else coral
+            val aimAlpha = if (ready) 195 else 70
+            val endX = target?.x?.coerceAtMost(350f) ?: 346f
+            stroke(aimColor, aimAlpha, 1.5f)
+            var lineX = GameCore.BIRD_X + 19f
+            while (lineX < endX) {
+                canvas.drawLine(lineX, core.birdY, minOf(lineX + 8f, endX), core.birdY, paint)
+                lineX += 14f
+            }
+            if (target != null) {
+                stroke(aimColor, aimAlpha, 2.2f)
+                canvas.drawCircle(target.x, core.birdY, 7f + sin(ambient * 9f), paint)
+            }
+        }
         if (core.guideLife > 0f) {
             stroke(cyan, (core.guideLife * 140).toInt().coerceIn(0, 150), 1f)
             canvas.drawLine(GameCore.BIRD_X, core.guideY, 360f, core.guideY, paint)
@@ -205,14 +224,15 @@ class Renderer {
         canvas.save()
         canvas.translate(GameCore.BIRD_X, y)
         canvas.rotate((core.birdVy / 430f * 24f).coerceIn(-23f, 25f))
-        val flutter = sin(ambient * 22f) * 5f
+        val flutter = if (core.gliding) sin(ambient * 4f) else sin(ambient * 22f) * 5f
+        val wingSpan = if (core.gliding) 42f else 31f
         fill(cyan, 33)
         canvas.drawCircle(0f, 0f, 25f, paint)
         val leftWing = Path().apply {
-            moveTo(-2f, -2f); cubicTo(-31f, -25f - flutter, -35f, 11f + flutter, -3f, 8f); close()
+            moveTo(-2f, -2f); cubicTo(-wingSpan, -25f - flutter, -wingSpan - 4f, 11f + flutter, -3f, 8f); close()
         }
         val rightWing = Path().apply {
-            moveTo(2f, -2f); cubicTo(31f, -25f - flutter, 35f, 11f + flutter, 3f, 8f); close()
+            moveTo(2f, -2f); cubicTo(wingSpan, -25f - flutter, wingSpan + 4f, 11f + flutter, 3f, 8f); close()
         }
         fill(cream)
         canvas.drawPath(leftWing, paint)
@@ -240,6 +260,21 @@ class Renderer {
         fill(gold)
         canvas.drawRoundRect(108f, 47f, 108f + 164f * core.dawnProgress(), 52f, 3f, 3f, paint)
         if (core.phase == GamePhase.PLAYING) {
+            val burstLabel = when {
+                core.pulses.isNotEmpty() -> "GUST IN FLIGHT"
+                core.shotCooldown > 0f -> "GUST RECHARGING"
+                core.gliding && core.canFire() -> "RELEASE TO FIRE"
+                core.gliding -> "GLIDING"
+                else -> "GUST READY"
+            }
+            val charged = core.shotCooldown <= 0f && core.pulses.isEmpty()
+            label(canvas, burstLabel, 180f, 72f, 10f, if (charged) cyan else cream, bodyFace)
+            fill(cream, 45)
+            canvas.drawRoundRect(133f, 77f, 227f, 80f, 2f, 2f, paint)
+            fill(if (charged) cyan else gold, 220)
+            canvas.drawRoundRect(133f, 77f,
+                133f + 94f * (1f - core.shotCooldown / GameCore.SHOT_COOLDOWN).coerceIn(0f, 1f),
+                80f, 2f, 2f, paint)
             stroke(cream, 210, 2.5f)
             canvas.drawLine(316f, 19f, 316f, 39f, paint)
             canvas.drawLine(327f, 19f, 327f, 39f, paint)
@@ -256,8 +291,8 @@ class Renderer {
         label(canvas, "CUT YOUR OWN WAY THROUGH", 180f, 271f, 13f, cyan, bodyFace)
         drawTinyGate(canvas, 180f, 337f, ambient)
         label(canvas, "TAP TO FLAP", 180f, 419f, 23f, cream, titleFace)
-        label(canvas, "Hit the wall's glowing band", 180f, 447f, 15f, cream, bodyFace)
-        label(canvas, "to carve a doorway.", 180f, 468f, 15f, cream, bodyFace)
+        label(canvas, "Hold to glide, release to fire", 180f, 447f, 15f, cream, bodyFace)
+        label(canvas, "Hit each glowing band", 180f, 468f, 15f, cream, bodyFace)
         fill(coral)
         canvas.drawRoundRect(74f, 494f, 286f, 535f, 20f, 20f, paint)
         label(canvas, "TAP TO BEGIN", 180f, 521f, 17f, dark, titleFace)

@@ -20,6 +20,9 @@ class SkywrightView(context: Context) : View(context), Choreographer.FrameCallba
     private var framePosted = false
     private var tapX = 180f
     private var tapY = 360f
+    private var activePointerId = MotionEvent.INVALID_POINTER_ID
+    private var pressActive = false
+    private var pressStartedMs = 0L
 
     init { isFocusable = true }
 
@@ -76,12 +79,38 @@ class SkywrightView(context: Context) : View(context), Choreographer.FrameCallba
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked != MotionEvent.ACTION_DOWN) return true
-        val scale = minOf(width / GameCore.WIDTH, height / GameCore.HEIGHT)
-        tapX = (event.x - (width - GameCore.WIDTH * scale) / 2f) / scale
-        tapY = (event.y - (height - GameCore.HEIGHT * scale) / 2f) / scale
-        performClick()
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val scale = minOf(width / GameCore.WIDTH, height / GameCore.HEIGHT)
+                tapX = (event.x - (width - GameCore.WIDTH * scale) / 2f) / scale
+                tapY = (event.y - (height - GameCore.HEIGHT * scale) / 2f) / scale
+                activePointerId = event.getPointerId(0)
+                pressStartedMs = event.eventTime
+                performClick()
+                if (!pressActive) activePointerId = MotionEvent.INVALID_POINTER_ID
+            }
+            MotionEvent.ACTION_UP -> finishPress(event.eventTime)
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (event.getPointerId(event.actionIndex) == activePointerId) finishPress(event.eventTime)
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                core.cancelPress()
+                pressActive = false
+                activePointerId = MotionEvent.INVALID_POINTER_ID
+                invalidate()
+            }
+        }
         return true
+    }
+
+    private fun finishPress(eventTimeMs: Long) {
+        if (pressActive) {
+            core.endPress((eventTimeMs - pressStartedMs).coerceAtLeast(0L) / 1000f)
+            drainEvents()
+            invalidate()
+        }
+        pressActive = false
+        activePointerId = MotionEvent.INVALID_POINTER_ID
     }
 
     override fun performClick(): Boolean {
@@ -107,19 +136,35 @@ class SkywrightView(context: Context) : View(context), Choreographer.FrameCallba
         }
 
         when (core.phase) {
-            GamePhase.READY -> core.start()
-            GamePhase.PLAYING -> if (x > 292f && y < GameCore.TOP) core.pause() else core.flap()
+            GamePhase.READY -> beginGamePress()
+            GamePhase.PLAYING -> if (x > 292f && y < GameCore.TOP) core.pause() else beginGamePress()
             GamePhase.PAUSED -> core.resume()
-            GamePhase.OVER -> core.restart()
-            GamePhase.WON -> core.restart()
+            GamePhase.OVER -> beginGamePress()
+            GamePhase.WON -> beginGamePress()
         }
         drainEvents()
         invalidate()
         return true
     }
 
+    private fun beginGamePress() {
+        if (activePointerId != MotionEvent.INVALID_POINTER_ID) {
+            core.beginPress()
+            pressActive = true
+        } else {
+            when (core.phase) {
+                GamePhase.READY -> core.start()
+                GamePhase.OVER, GamePhase.WON -> core.restart()
+                GamePhase.PLAYING -> core.flap()
+                GamePhase.PAUSED -> Unit
+            }
+        }
+    }
+
     fun pauseGame() {
         core.pause()
+        pressActive = false
+        activePointerId = MotionEvent.INVALID_POINTER_ID
         accumulator = 0f
         lastFrameNanos = 0L
         invalidate()
@@ -129,7 +174,7 @@ class SkywrightView(context: Context) : View(context), Choreographer.FrameCallba
         if (core.events.isEmpty()) return
         core.events.forEach { event ->
             audio.play(event, soundOn)
-            if (vibrationOn && (event == GameEvent.FLAP || event == GameEvent.HIT || event == GameEvent.WIN)) {
+            if (vibrationOn && (event == GameEvent.FLAP || event == GameEvent.FIRE || event == GameEvent.HIT || event == GameEvent.WIN)) {
                 performHapticFeedback(if (event == GameEvent.HIT || event == GameEvent.WIN) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP)
             }
             if (event == GameEvent.SCORE) prefs.edit().putInt("best", core.best).apply()
