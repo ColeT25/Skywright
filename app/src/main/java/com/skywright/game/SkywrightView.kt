@@ -2,10 +2,12 @@ package com.skywright.game
 
 import android.content.Context
 import android.graphics.Canvas
+import android.os.Build
 import android.view.Choreographer
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowInsets
 
 class SkywrightView(context: Context) : View(context), Choreographer.FrameCallback {
     private val prefs = context.getSharedPreferences("skywright", Context.MODE_PRIVATE)
@@ -23,6 +25,7 @@ class SkywrightView(context: Context) : View(context), Choreographer.FrameCallba
     private var activePointerId = MotionEvent.INVALID_POINTER_ID
     private var pressActive = false
     private var pressStartedMs = 0L
+    private var safeTopPixels = 0
 
     init { isFocusable = true }
 
@@ -75,15 +78,21 @@ class SkywrightView(context: Context) : View(context), Choreographer.FrameCallba
     }
 
     override fun onDraw(canvas: Canvas) {
-        renderer.draw(canvas, core, ambient, soundOn, vibrationOn)
+        renderer.draw(canvas, core, ambient, soundOn, vibrationOn, safeTopPixels)
+    }
+
+    override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
+        safeTopPixels = if (Build.VERSION.SDK_INT >= 28) insets.displayCutout?.safeInsetTop ?: 0 else 0
+        invalidate()
+        return super.onApplyWindowInsets(insets)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val scale = minOf(width / GameCore.WIDTH, height / GameCore.HEIGHT)
-                tapX = (event.x - (width - GameCore.WIDTH * scale) / 2f) / scale
-                tapY = (event.y - (height - GameCore.HEIGHT * scale) / 2f) / scale
+                val layout = ScreenLayout.forSize(width, height, safeTopPixels)
+                tapX = layout.worldX(event.x)
+                tapY = layout.worldY(event.y)
                 activePointerId = event.getPointerId(0)
                 pressStartedMs = event.eventTime
                 performClick()

@@ -29,15 +29,16 @@ class Renderer {
     private val titleFace = Typeface.create("sans-serif-condensed", Typeface.BOLD)
     private val bodyFace = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
-    fun draw(canvas: Canvas, core: GameCore, ambient: Float, soundOn: Boolean, vibrationOn: Boolean) {
+    fun draw(canvas: Canvas, core: GameCore, ambient: Float, soundOn: Boolean, vibrationOn: Boolean, safeTopPixels: Int = 0) {
         canvas.drawColor(dark)
-        val scale = minOf(canvas.width / GameCore.WIDTH, canvas.height / GameCore.HEIGHT)
+        val layout = ScreenLayout.forSize(canvas.width, canvas.height, safeTopPixels)
         canvas.save()
-        canvas.translate((canvas.width - GameCore.WIDTH * scale) / 2f, (canvas.height - GameCore.HEIGHT * scale) / 2f)
-        canvas.scale(scale, scale)
+        canvas.translate(layout.offsetX, layout.offsetY)
+        canvas.scale(layout.scale, layout.scale)
 
-        drawSky(canvas, ambient, core.dawnProgress())
-        drawHorizon(canvas, ambient, core.distanceTravelled)
+        drawSky(canvas, ambient, core.dawnProgress(), layout)
+        drawHorizon(canvas, ambient, core.distanceTravelled, layout)
+        core.gusts.forEach { drawWindGust(canvas, it, ambient) }
         core.walls.forEach { drawWall(canvas, core, it, ambient) }
         drawGuideAndPulses(canvas, core, ambient)
         core.sparks.forEach { spark ->
@@ -45,7 +46,10 @@ class Renderer {
             canvas.drawCircle(spark.x, spark.y, 1.7f + spark.life * 2f, paint)
         }
         drawMoth(canvas, core, ambient)
+        canvas.save()
+        canvas.translate(0f, layout.hudShift)
         drawHud(canvas, core)
+        canvas.restore()
 
         when (core.phase) {
             GamePhase.READY -> drawReady(canvas, core, soundOn, vibrationOn, ambient)
@@ -57,7 +61,7 @@ class Renderer {
         canvas.restore()
     }
 
-    private fun drawSky(canvas: Canvas, ambient: Float, progress: Float) {
+    private fun drawSky(canvas: Canvas, ambient: Float, progress: Float, layout: ScreenLayout) {
         paint.style = Paint.Style.FILL
         paint.alpha = 255
         paint.shader = LinearGradient(0f, 0f, 0f, 720f,
@@ -68,7 +72,7 @@ class Renderer {
                 blend(Color.rgb(180, 103, 116), Color.rgb(255, 199, 137), progress),
             ),
             null, Shader.TileMode.CLAMP)
-        canvas.drawRect(0f, 0f, 360f, 720f, paint)
+        canvas.drawRect(layout.left, layout.top, layout.right, layout.bottom, paint)
         paint.shader = null
 
         stars.forEachIndexed { index, (sx, sy, radius) ->
@@ -104,24 +108,53 @@ class Renderer {
         )
     }
 
-    private fun drawHorizon(canvas: Canvas, ambient: Float, distance: Float) {
+    private fun drawHorizon(canvas: Canvas, ambient: Float, distance: Float, layout: ScreenLayout) {
         fill(midnight, 145)
         for (i in 0..8) {
             val x = i * 55f - ((ambient + distance * 0.055f) % 55f)
             val h = 65f + ((i * 37) % 5) * 17f
             canvas.drawRoundRect(x, GameCore.BOTTOM - h, x + 39f, GameCore.BOTTOM + 2f, 6f, 6f, paint)
         }
-        fill(dark)
-        canvas.drawRect(0f, GameCore.BOTTOM, 360f, 720f, paint)
+        // A thin veil lets the below-horizon sun color the foreground at dawn.
+        fill(dark, 232)
+        canvas.drawRect(layout.left, GameCore.BOTTOM, layout.right, layout.bottom, paint)
         fill(coral, 175)
         canvas.drawRect(0f, GameCore.BOTTOM, 360f, GameCore.BOTTOM + 2f, paint)
         fill(cream, 18)
-        for (i in 0..12) {
+        for (i in 0..17) {
             val x = i * 34f - ((ambient * 3f + distance * 0.35f) % 34f)
-            canvas.drawRoundRect(x, 682f, x + 17f, 684f, 1f, 1f, paint)
+            val y = 682f + (i % 3) * 22f
+            if (y < layout.bottom - 5f) canvas.drawRoundRect(x, y, x + 17f, y + 2f, 1f, 1f, paint)
         }
         fill(dark, 150)
-        canvas.drawRect(0f, 0f, 360f, GameCore.TOP, paint)
+        canvas.drawRect(layout.left, layout.top, layout.right, GameCore.TOP, paint)
+    }
+
+    private fun drawWindGust(canvas: Canvas, gust: WindGust, ambient: Float) {
+        if (gust.x + gust.width < 0f || gust.x > GameCore.WIDTH) return
+        val color = if (gust.direction < 0) cyan else coral
+        val top = GameCore.TOP + 30f
+        val bottom = GameCore.BOTTOM - 18f
+        fill(color, 22)
+        canvas.drawRoundRect(gust.x, top, gust.x + gust.width, bottom, 28f, 28f, paint)
+        stroke(color, 105, 1.5f)
+        canvas.drawLine(gust.x + 4f, top + 22f, gust.x + 4f, bottom - 22f, paint)
+        canvas.drawLine(gust.x + gust.width - 4f, top + 22f, gust.x + gust.width - 4f, bottom - 22f, paint)
+        label(canvas, if (gust.direction < 0) "UPDRAFT" else "DOWNDRAFT",
+            gust.x + gust.width / 2f, top + 16f, 10f, color, bodyFace)
+        for (column in 0..2) {
+            val x = gust.x + 25f + column * 31f
+            for (row in 0..9) {
+                val travel = (row * 56f + ambient * 63f + column * 19f) % 510f
+                val y = top + 36f + if (gust.direction < 0) 510f - travel else travel
+                if (y < top + 35f || y > bottom - 20f) continue
+                val tip = y + gust.direction * 10f
+                stroke(color, 100 + column * 25, 2f)
+                canvas.drawLine(x, y - gust.direction * 8f, x, tip, paint)
+                canvas.drawLine(x - 5f, tip - gust.direction * 5f, x, tip, paint)
+                canvas.drawLine(x + 5f, tip - gust.direction * 5f, x, tip, paint)
+            }
+        }
     }
 
     private fun drawWall(canvas: Canvas, core: GameCore, wall: Wall, ambient: Float) {

@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.random.Random
 
 class GameCoreTest {
     @Test fun quickTapFlapsWithoutFiring() {
@@ -83,6 +84,60 @@ class GameCoreTest {
         assertTrue(game.wallSpeed() < boostedSpeed)
         assertEquals(0f, game.glideBoost, 0.001f)
         assertEquals(game.baseWallSpeed(), game.wallSpeed(), 0.001f)
+    }
+
+    @Test fun glideSettlesAtTheNewSlightlySteeperFallSpeed() {
+        val game = GameCore()
+        game.start()
+        game.beginPress()
+        repeat(85) { game.update(1f / 60f) }
+        assertEquals(GamePhase.PLAYING, game.phase)
+        assertTrue(game.gliding)
+        assertEquals(195f, game.birdVy, 0.01f)
+    }
+
+    @Test fun windMovesTheMothInItsMarkedDirectionWhileInsideTheStream() {
+        fun flight(direction: Int): Float {
+            val game = GameCore()
+            game.walls.clear()
+            game.walls += Wall(99, 800f)
+            if (direction != 0) game.gusts += WindGust(40f, 112f, direction, 99)
+            game.start()
+            repeat(10) { game.update(1f / 60f) }
+            assertEquals(GamePhase.PLAYING, game.phase)
+            return game.birdY
+        }
+        val calm = flight(0)
+        assertEquals(calm - GameCore.GUST_DRIFT / 6f, flight(-1), 0.01f)
+        assertEquals(calm + GameCore.GUST_DRIFT / 6f, flight(1), 0.01f)
+    }
+
+    @Test fun gustsWaitForTheIntroductionAndReserveRecoverySpaceBeforeTheNextWall() {
+        val alwaysGust = object : Random() { override fun nextBits(bitCount: Int) = 0 }
+        val game = GameCore(random = alwaysGust)
+        game.start()
+        game.walls.last().x = 900f
+        game.update(1f / 60f)
+        assertEquals(0f, game.gustChance(), 0f)
+        assertTrue(game.gusts.isEmpty())
+        repeat(1_500) {
+            game.walls.clear()
+            game.walls += Wall(99, 1000f, gapCenter = 350f)
+            if (game.birdY > 350f && game.birdVy > 0f) game.flap()
+            game.update(1f / 60f)
+        }
+        assertEquals(GamePhase.PLAYING, game.phase)
+        assertTrue(game.gustChance() > 0f)
+        game.walls.clear()
+        game.walls += Wall(99, 900f, gapCenter = 350f)
+        game.update(1f / 60f)
+        val gust = game.gusts.single()
+        val nextWall = game.walls.single { it.id == gust.nextWallId }
+        assertTrue(nextWall.x - (gust.x + gust.width) >= GameCore.GUST_RECOVERY_DISTANCE)
+        assertTrue((nextWall.x - gust.x - gust.width) / 250f >= 1.4f)
+        game.walls.last().x = 900f
+        game.update(1f / 60f)
+        assertEquals(1, game.gusts.size)
     }
 
     @Test fun aPulseOutsideTheWeakBandDoesNotOpenTheWallAndCanBeRetried() {
@@ -175,10 +230,12 @@ class GameCoreTest {
         game.start()
         var failureState = ""
         var heldFrames = 0
+        val encounteredGusts = mutableSetOf<Int>()
         repeat(18_100) { frame ->
             if (game.phase == GamePhase.PLAYING) {
                 heldFrames = guide(game, frame, heldFrames)
                 game.update(1f / 60f)
+                game.gusts.filter { it.x <= GameCore.BIRD_X }.forEach { encounteredGusts += it.nextWallId }
                 if (game.phase == GamePhase.OVER) {
                     failureState = "frame=$frame score=${game.score} y=${game.birdY} vy=${game.birdVy} held=$heldFrames cooldown=${game.shotCooldown} target=${game.targetWall()} wall=${game.walls.firstOrNull()}"
                 }
@@ -186,6 +243,8 @@ class GameCoreTest {
         }
         assertEquals(failureState, GamePhase.WON, game.phase)
         assertTrue(game.score > 100)
+        assertTrue("The route must exercise wind, not just ordinary walls", encounteredGusts.isNotEmpty())
+        assertEquals(0.16f, game.gustChance(), 0.001f)
     }
 
     /** A simple one-thumb controller: quick flaps for height, a real 0.2 s hold to aim. */

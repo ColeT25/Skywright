@@ -95,6 +95,12 @@ Quick taps still flap. Every touch starts with a flap; after 0.18 seconds of hol
 
 A successful burst still has to cross the glowing breakable band, but the doorway now opens at the wall's marked center instead of at the burst's impact height. This makes the marker a reliable preview of the opening location. The sunrise's starting wall speed is reduced from 120 to 110 logical units per second; it still reaches 210 by the five-minute goal. Gliding has a steeper fall and gradually adds up to 40 units per second of temporary wall speed. The extra speed eases away over roughly 0.4 seconds after the glide ends, returning to the current sunrise pace. Background parallax follows the actual distance traveled.
 
+## Version 1.4 addendum: Responsive sky and wind lanes
+
+The glide falls slightly faster: glide gravity rises from 350 to 365 logical units/s² and its fall limit from 185 to 195 units/s. The 360 × 720 physics field, wall scale, and horizontal lookahead stay fixed. On taller phones, the renderer extends the sky and foreground into the extra vertical area instead of leaving letterbox strips, moves the HUD toward the top edge, and respects the display-cutout safe inset. Touches use the same screen transform as the artwork.
+
+After 25 seconds, a wall gap can contain a wind lane. Its full-height translucent ribbon and moving arrows indicate an updraft or downdraft before the moth reaches it. Inside the 112-unit lane, wind adds a steady vertical drift of 205 units/s; flapping and gliding still work normally. Gust chance starts at about 6% per generated gap and approaches 16% by sunrise, with no consecutive gust gaps. A gust gap is at least 600 units wide, leaving at least 350 units between the wind lane and its following wall—at least 1.4 seconds at the maximum wall speed of 250 units/s. The lane begins after the prior wall has passed, so the player gets a distinct recovery and aiming interval.
+
 ## Android documentation used for the implementation path
 
 - [Build and install APKs from the command line](https://developer.android.com/build/building-cmdline) — debug APKs, release signing, and device installation.

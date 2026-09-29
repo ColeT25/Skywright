@@ -23,6 +23,9 @@ data class Wall(
 
 data class Pulse(val targetId: Int, var x: Float, val y: Float)
 data class Spark(var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val warm: Boolean = false)
+data class WindGust(var x: Float, val width: Float, val direction: Int, val nextWallId: Int) {
+    init { require(width > 0f && direction in -1..1 && direction != 0) }
+}
 
 /** Android-free fixed-step simulation. All mutations occur on the View's UI thread. */
 class GameCore(private val random: Random = Random(19), private val winSeconds: Float = 300f) {
@@ -39,11 +42,15 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         const val FLAP_SPEED = -280f
         const val HOLD_SECONDS = 0.18f
         const val SHOT_COOLDOWN = 0.9f
-        const val GLIDE_GRAVITY = 350f
-        const val GLIDE_FALL_LIMIT = 185f
+        const val GLIDE_GRAVITY = 365f
+        const val GLIDE_FALL_LIMIT = 195f
         const val GLIDE_BOOST_MAX = 40f
         const val GLIDE_BOOST_ACCEL = 30f
         const val GLIDE_BOOST_DECEL = 100f
+        const val GUST_WIDTH = 112f
+        const val GUST_DRIFT = 205f
+        const val GUST_RECOVERY_DISTANCE = 350f
+        private const val GUST_LEAD = 82f
     }
 
     init { require(winSeconds > 0f) }
@@ -77,14 +84,17 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
     private var pressTime = 0f
 
     val walls = mutableListOf<Wall>()
+    val gusts = mutableListOf<WindGust>()
     val pulses = mutableListOf<Pulse>()
     val sparks = mutableListOf<Spark>()
     val events = mutableListOf<GameEvent>()
     private var nextWallId = 0
+    private var lastGapHadGust = false
 
     init { reset() }
 
     fun dawnProgress(): Float = (elapsed / winSeconds).coerceIn(0f, 1f)
+    fun gustChance(): Float = if (elapsed < 25f) 0f else 0.06f + 0.10f * dawnProgress()
     fun baseWallSpeed(): Float = 110f + 100f * dawnProgress()
     fun wallSpeed(): Float = baseWallSpeed() + glideBoost
     fun secondsToDawn(): Int = kotlin.math.ceil((winSeconds - elapsed).coerceAtLeast(0f)).toInt()
@@ -103,10 +113,12 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         shotCooldown = 0f
         glideBoost = 0f
         walls.clear()
+        gusts.clear()
         pulses.clear()
         sparks.clear()
         events.clear()
         nextWallId = 0
+        lastGapHadGust = false
         val introCenters = floatArrayOf(350f, 392f, 328f)
         repeat(3) { index ->
             walls += Wall(nextWallId++, 340f + index * 400f, weakCenter = introCenters[index])
@@ -177,6 +189,8 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
     fun canFire(): Boolean = phase == GamePhase.PLAYING && shotCooldown <= 0f &&
         pulses.isEmpty() && targetWall()?.pulsePending == false
 
+    fun activeGust(): WindGust? = gusts.firstOrNull { BIRD_X >= it.x && BIRD_X <= it.x + it.width }
+
     private fun fire() {
         if (!canFire()) return
         val target = targetWall() ?: return
@@ -207,7 +221,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         }
         birdVy = min(if (gliding) GLIDE_FALL_LIMIT else 430f,
             birdVy + (if (gliding) GLIDE_GRAVITY else GRAVITY) * dt)
-        birdY += birdVy * dt
+        birdY += (birdVy + (activeGust()?.direction ?: 0) * GUST_DRIFT) * dt
 
         val speed = wallSpeed()
         distanceTravelled += speed * dt
@@ -216,6 +230,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
             if (wall.gapCenter != null) wall.openAge += dt
             wall.missAge = max(0f, wall.missAge - dt)
         }
+        gusts.forEach { it.x -= speed * dt }
 
         val pulseIterator = pulses.iterator()
         while (pulseIterator.hasNext()) {
@@ -267,16 +282,33 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
             }
         }
         walls.removeAll { it.x + WALL_WIDTH < -40f }
+        gusts.removeAll { it.x + it.width < -40f }
         while (walls.last().x < WIDTH + 560f) {
-            val spacing = 390f + random.nextInt(0, 3) * 18f
-            val center = (walls.last().weakCenter + random.nextInt(-68, 69)).coerceIn(TOP + 120f, BOTTOM - 120f)
             val progress = dawnProgress()
+            val chance = gustChance()
+            val gustBeforeWall = chance > 0f && !lastGapHadGust && random.nextFloat() < chance
+            val minSpacing = if (gustBeforeWall) {
+                WALL_WIDTH + GUST_LEAD + GUST_WIDTH + GUST_RECOVERY_DISTANCE + 4f
+            } else 390f
+            val spacing = minSpacing + random.nextInt(0, 3) * 18f
+            val previousWall = walls.last()
+            val nextX = previousWall.x + spacing
+            val center = (walls.last().weakCenter + random.nextInt(-68, 69)).coerceIn(TOP + 120f, BOTTOM - 120f)
+            if (gustBeforeWall) {
+                gusts += WindGust(
+                    previousWall.x + WALL_WIDTH + GUST_LEAD,
+                    GUST_WIDTH,
+                    if (random.nextBoolean()) -1 else 1,
+                    nextWallId,
+                )
+            }
             walls += Wall(
-                nextWallId++, walls.last().x + spacing,
+                nextWallId++, nextX,
                 weakCenter = center,
                 weakHalfHeight = 80f - 44f * progress,
                 openingHeight = 164f - 32f * progress,
             )
+            lastGapHadGust = gustBeforeWall
         }
         if (elapsed >= winSeconds) {
             cancelPress()
