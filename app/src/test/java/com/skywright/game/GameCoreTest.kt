@@ -17,7 +17,7 @@ class GameCoreTest {
         assertTrue(GameEvent.FLAP in game.events)
     }
 
-    @Test fun releaseAfterGlidingFiresAtReleaseHeight() {
+    @Test fun releaseFiresAtCurrentHeightButOpensAtTargetCenter() {
         val game = GameCore()
         game.start()
         game.beginPress()
@@ -30,7 +30,8 @@ class GameCoreTest {
         assertTrue(game.shotCooldown > 0f)
         assertTrue(GameEvent.FIRE in game.events)
         repeat(25) { game.update(1f / 60f) }
-        assertEquals(sampled, game.walls.first().gapCenter!!, 0.01f)
+        assertEquals(game.walls.first().weakCenter, game.walls.first().gapCenter!!, 0.01f)
+        assertNotEquals(sampled, game.walls.first().gapCenter!!)
         assertNotEquals(sampled, game.birdY)
     }
 
@@ -66,6 +67,22 @@ class GameCoreTest {
         assertTrue(game.pulses.isEmpty())
         game.resume()
         assertEquals(GamePhase.PLAYING, game.phase)
+    }
+
+    @Test fun glideBuildsWorldSpeedAndReturnsToTheSunrisePaceAfterRelease() {
+        val game = GameCore()
+        game.start()
+        game.beginPress()
+        repeat(40) { game.update(1f / 60f) }
+        assertTrue(game.gliding)
+        assertTrue(game.glideBoost > 0f)
+        assertTrue(game.wallSpeed() > game.baseWallSpeed())
+        game.endPress(40f / 60f)
+        val boostedSpeed = game.wallSpeed()
+        repeat(20) { game.update(1f / 60f) }
+        assertTrue(game.wallSpeed() < boostedSpeed)
+        assertEquals(0f, game.glideBoost, 0.001f)
+        assertEquals(game.baseWallSpeed(), game.wallSpeed(), 0.001f)
     }
 
     @Test fun aPulseOutsideTheWeakBandDoesNotOpenTheWallAndCanBeRetried() {
@@ -144,6 +161,7 @@ class GameCoreTest {
 
     @Test fun sunriseAdvancesWithPlayTimeAndEndsTheRunAtFiveMinuteEquivalent() {
         val game = GameCore(winSeconds = 0.5f)
+        assertEquals(110f, game.wallSpeed(), 0.001f)
         game.start()
         repeat(30) { game.update(1f / 60f) }
         assertEquals(GamePhase.WON, game.phase)

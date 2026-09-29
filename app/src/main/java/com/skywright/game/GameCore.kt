@@ -39,8 +39,11 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         const val FLAP_SPEED = -280f
         const val HOLD_SECONDS = 0.18f
         const val SHOT_COOLDOWN = 0.9f
-        const val GLIDE_GRAVITY = 300f
-        const val GLIDE_FALL_LIMIT = 135f
+        const val GLIDE_GRAVITY = 350f
+        const val GLIDE_FALL_LIMIT = 185f
+        const val GLIDE_BOOST_MAX = 40f
+        const val GLIDE_BOOST_ACCEL = 30f
+        const val GLIDE_BOOST_DECEL = 100f
     }
 
     init { require(winSeconds > 0f) }
@@ -56,6 +59,8 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
     var best = 0
     var elapsed = 0f
         private set
+    var distanceTravelled = 0f
+        private set
     var guideY = 350f
         private set
     var guideLife = 0f
@@ -65,6 +70,8 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
     var gliding = false
         private set
     var shotCooldown = 0f
+        private set
+    var glideBoost = 0f
         private set
     private var pressed = false
     private var pressTime = 0f
@@ -78,7 +85,8 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
     init { reset() }
 
     fun dawnProgress(): Float = (elapsed / winSeconds).coerceIn(0f, 1f)
-    fun wallSpeed(): Float = 120f + 90f * dawnProgress()
+    fun baseWallSpeed(): Float = 110f + 100f * dawnProgress()
+    fun wallSpeed(): Float = baseWallSpeed() + glideBoost
     fun secondsToDawn(): Int = kotlin.math.ceil((winSeconds - elapsed).coerceAtLeast(0f)).toInt()
 
     fun reset() {
@@ -87,11 +95,13 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         birdVy = 0f
         score = 0
         elapsed = 0f
+        distanceTravelled = 0f
         guideLife = 0f
         pressed = false
         gliding = false
         pressTime = 0f
         shotCooldown = 0f
+        glideBoost = 0f
         walls.clear()
         pulses.clear()
         sparks.clear()
@@ -190,11 +200,17 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
                 birdVy = max(birdVy, -105f)
             }
         }
+        glideBoost = if (gliding) {
+            min(GLIDE_BOOST_MAX, glideBoost + GLIDE_BOOST_ACCEL * dt)
+        } else {
+            max(0f, glideBoost - GLIDE_BOOST_DECEL * dt)
+        }
         birdVy = min(if (gliding) GLIDE_FALL_LIMIT else 430f,
             birdVy + (if (gliding) GLIDE_GRAVITY else GRAVITY) * dt)
         birdY += birdVy * dt
 
         val speed = wallSpeed()
+        distanceTravelled += speed * dt
         walls.forEach { wall ->
             wall.x -= speed * dt
             if (wall.gapCenter != null) wall.openAge += dt
@@ -211,8 +227,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
             } else if (pulse.x >= wall.x) {
                 if (wall.x > BIRD_X + BIRD_RADIUS && wall.gapCenter == null) {
                     if (abs(pulse.y - wall.weakCenter) <= wall.weakHalfHeight) {
-                        val halfGap = gapHeight(wall) / 2f
-                        wall.gapCenter = pulse.y.coerceIn(TOP + halfGap + 16f, BOTTOM - halfGap - 16f)
+                        wall.gapCenter = wall.weakCenter
                         wall.openAge = 0f
                         lastCutY = wall.gapCenter!!
                         burst(wall.x, wall.gapCenter!!)

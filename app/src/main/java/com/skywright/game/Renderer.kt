@@ -37,7 +37,7 @@ class Renderer {
         canvas.scale(scale, scale)
 
         drawSky(canvas, ambient, core.dawnProgress())
-        drawHorizon(canvas, ambient)
+        drawHorizon(canvas, ambient, core.distanceTravelled)
         core.walls.forEach { drawWall(canvas, core, it, ambient) }
         drawGuideAndPulses(canvas, core, ambient)
         core.sparks.forEach { spark ->
@@ -104,10 +104,10 @@ class Renderer {
         )
     }
 
-    private fun drawHorizon(canvas: Canvas, ambient: Float) {
+    private fun drawHorizon(canvas: Canvas, ambient: Float, distance: Float) {
         fill(midnight, 145)
         for (i in 0..8) {
-            val x = i * 55f - ((ambient * 7f) % 55f)
+            val x = i * 55f - ((ambient + distance * 0.055f) % 55f)
             val h = 65f + ((i * 37) % 5) * 17f
             canvas.drawRoundRect(x, GameCore.BOTTOM - h, x + 39f, GameCore.BOTTOM + 2f, 6f, 6f, paint)
         }
@@ -117,7 +117,7 @@ class Renderer {
         canvas.drawRect(0f, GameCore.BOTTOM, 360f, GameCore.BOTTOM + 2f, paint)
         fill(cream, 18)
         for (i in 0..12) {
-            val x = i * 34f - ((ambient * 42f) % 34f)
+            val x = i * 34f - ((ambient * 3f + distance * 0.35f) % 34f)
             canvas.drawRoundRect(x, 682f, x + 17f, 684f, 1f, 1f, paint)
         }
         fill(dark, 150)
@@ -223,7 +223,7 @@ class Renderer {
         val y = core.birdY + if (core.phase == GamePhase.READY) sin(ambient * 2f) * 6f else 0f
         canvas.save()
         canvas.translate(GameCore.BIRD_X, y)
-        canvas.rotate((core.birdVy / 430f * 24f).coerceIn(-23f, 25f))
+        canvas.rotate((core.birdVy / 430f * 24f + if (core.gliding) 8f else 0f).coerceIn(-23f, 35f))
         val flutter = if (core.gliding) sin(ambient * 4f) else sin(ambient * 22f) * 5f
         val wingSpan = if (core.gliding) 42f else 31f
         fill(cyan, 33)

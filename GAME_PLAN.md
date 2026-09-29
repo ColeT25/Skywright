@@ -91,6 +91,10 @@ The original endless scoring loop became a five-minute survival ascent. A visibl
 
 Quick taps still flap. Every touch starts with a flap; after 0.18 seconds of holding, the moth unfolds its wings and glides with lower gravity and a slower fall limit. A live dashed guide tracks the moth's height and changes color when it lines up with the nearest closed wall's breakable band. Releasing after a glide fires one horizontal burst at the moth's release height. A quick tap never fires. Shots have a 0.9-second cooldown, and only one burst can be in flight. A hold can still be used for movement when no shot is available. Walls are spaced farther apart to give players time to aim and recover as the sunrise accelerates the game. Future obstacle types can make the choice between flapping and gliding more varied without changing these controls.
 
+## Version 1.3 addendum: Targeted openings and glide momentum
+
+A successful burst still has to cross the glowing breakable band, but the doorway now opens at the wall's marked center instead of at the burst's impact height. This makes the marker a reliable preview of the opening location. The sunrise's starting wall speed is reduced from 120 to 110 logical units per second; it still reaches 210 by the five-minute goal. Gliding has a steeper fall and gradually adds up to 40 units per second of temporary wall speed. The extra speed eases away over roughly 0.4 seconds after the glide ends, returning to the current sunrise pace. Background parallax follows the actual distance traveled.
+
 ## Android documentation used for the implementation path
 
 - [Build and install APKs from the command line](https://developer.android.com/build/building-cmdline) — debug APKs, release signing, and device installation.
