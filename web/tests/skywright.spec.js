@@ -127,6 +127,11 @@ test("reloads and starts a run offline after the cache is ready", async ({
 
   await context.setOffline(true);
   await page.reload();
+  await page.getByRole("button", { name: "Tutorial", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Flap", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Exit tutorial" }).click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
 });

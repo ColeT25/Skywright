@@ -51,7 +51,14 @@
           <strong id="score"></strong>
           <span id="score-caption"></span>
         </div>
-        <button id="action" class="action" type="button" disabled>Play</button>
+        <div class="menu-actions">
+          <button id="action" class="action" type="button" disabled>
+            Play
+          </button>
+          <button id="tutorial-start" class="secondary" type="button" disabled>
+            Tutorial
+          </button>
+        </div>
         <p id="details" class="details">5:00 to sunrise · Best 0</p>
         <div class="settings" aria-label="Game settings" role="group">
           <button id="sound" type="button" aria-pressed="true" disabled>
@@ -61,6 +68,28 @@
             Vibration <span aria-hidden="true">on</span>
           </button>
         </div>
+      </section>
+      <button
+        id="tutorial-exit"
+        class="secondary tutorial-exit"
+        type="button"
+        hidden
+      >
+        Exit tutorial
+      </button>
+      <section
+        id="tutorial-guide"
+        class="tutorial-guide"
+        aria-labelledby="tutorial-heading"
+        hidden
+      >
+        <div role="status">
+          <h2 id="tutorial-heading"></h2>
+          <p id="tutorial-instructions"></p>
+        </div>
+        <button id="tutorial-play" class="action" type="button" hidden>
+          Play
+        </button>
       </section>
       <noscript>Enable JavaScript to play Skywright.</noscript>
     </main>

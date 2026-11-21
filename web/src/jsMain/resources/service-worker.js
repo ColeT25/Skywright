@@ -1,5 +1,5 @@
 const CACHE_PREFIX = `skywright:${self.registration.scope}:`;
-const CACHE_NAME = `${CACHE_PREFIX}1`;
+const CACHE_NAME = `${CACHE_PREFIX}2`;
 const entry = new URL("index.html", self.registration.scope).href;
 const assets = new Set(
   [

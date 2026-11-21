@@ -48,7 +48,7 @@ body {
   outline-offset: -4px;
 }
 
-#game:not([data-phase="playing"])::before {
+#game:not([data-phase="playing"], [data-tutorial])::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -189,6 +189,61 @@ button:disabled {
   background: #ffb5ab;
 }
 
+.menu-actions {
+  display: grid;
+  gap: 0.5rem;
+  width: min(100%, 17rem);
+}
+
+.secondary,
+.settings button {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid #79f1e15c;
+  border-radius: 999px;
+  background: #18274c;
+  color: var(--cream);
+  font-size: 0.875rem;
+}
+
+.secondary:hover,
+.settings button:hover {
+  border-color: var(--mint);
+}
+
+.tutorial-exit {
+  position: absolute;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  right: calc(0.75rem + env(safe-area-inset-right, 0px));
+}
+
+.tutorial-guide {
+  position: absolute;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  width: min(28rem, calc(100% - 1.5rem));
+  padding: 0.75rem 1rem;
+  border: 1px solid #79f1e17a;
+  border-radius: 1rem;
+  background: #111d3df0;
+  text-align: center;
+  pointer-events: none;
+}
+
+.tutorial-guide h2 {
+  margin: 0 0 0.25rem;
+  color: var(--mint);
+  font-size: 1.125rem;
+}
+
+.tutorial-guide p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.tutorial-guide button {
+  margin-top: 0.75rem;
+  pointer-events: auto;
+}
+
 .details {
   color: var(--gold);
   font-size: 0.875rem;
@@ -201,18 +256,6 @@ button:disabled {
   gap: 0.5rem;
 }
 
-.settings button {
-  padding: 0.4rem 0.85rem;
-  border: 1px solid #79f1e15c;
-  border-radius: 999px;
-  background: #18274c;
-  color: var(--cream);
-  font-size: 0.875rem;
-}
-
-.settings button:hover {
-  border-color: var(--mint);
-}
 .settings button span {
   color: var(--mint);
 }

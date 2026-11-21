@@ -38,6 +38,12 @@ private class BrowserGame(
     private val root = element<HTMLElement>("game")
     private val topInset = element<HTMLElement>("safe-inset")
     private val action = element<HTMLButtonElement>("action")
+    private val tutorialButton = element<HTMLButtonElement>("tutorial-start")
+    private val tutorialExit = element<HTMLButtonElement>("tutorial-exit")
+    private val tutorialGuide = element<HTMLElement>("tutorial-guide")
+    private val tutorialHeading = element<HTMLElement>("tutorial-heading")
+    private val tutorialInstructions = element<HTMLElement>("tutorial-instructions")
+    private val tutorialPlay = element<HTMLButtonElement>("tutorial-play")
     private val pause = element<HTMLButtonElement>("pause")
     private val sound = element<HTMLButtonElement>("sound")
     private val vibration = element<HTMLButtonElement>("vibration")
@@ -52,12 +58,15 @@ private class BrowserGame(
     private val details = element<HTMLElement>("details")
     private val canVibrate = jsTypeOf(window.navigator.asDynamic().vibrate) == "function"
 
-    private val core = GameCore().apply { best = readSetting("best")?.toIntOrNull()?.coerceAtLeast(0) ?: 0 }
+    private val game = GameCore().apply { best = readSetting("best")?.toIntOrNull()?.coerceAtLeast(0) ?: 0 }
+    private var tutorial: FlightTutorial? = null
+    private val core: GameCore get() = tutorial?.core ?: game
     private val audio = BrowserAudio()
     private var soundOn = readSetting("sound") != "false"
     private var vibrationOn = readSetting("vibration") != "false"
     private var savedBest = core.best
     private var displayedPhase: GamePhase? = null
+    private var displayedTutorialCue: TutorialCue? = null
     private var activePointer: Int? = null
     private var spaceHeld = false
     private var pressStartedAt = 0.0
@@ -70,12 +79,19 @@ private class BrowserGame(
 
     init {
         action.disabled = false
+        tutorialButton.disabled = false
         sound.disabled = false
         vibration.hidden = !canVibrate
         updateSettingButton(sound, soundOn)
         updateSettingButton(vibration, vibrationOn)
 
         action.addEventListener("click", { runAction() })
+        tutorialButton.addEventListener("click", { startTutorial() })
+        tutorialExit.addEventListener("click", { leaveTutorial() })
+        tutorialPlay.addEventListener("click", {
+            leaveTutorial()
+            runAction()
+        })
         pause.addEventListener("click", { pauseRun() })
         sound.addEventListener("click", {
             soundOn = !soundOn
@@ -145,8 +161,12 @@ private class BrowserGame(
                     if (steps == MAX_FRAME_STEPS) accumulator = 0.0
                 }
                 drainEvents()
+                if (tutorial?.advance() == true) {
+                    cancelInput()
+                    resetClock()
+                }
                 syncInterface()
-                renderer.draw(core, ambient, layout, width, height)
+                renderer.draw(core, ambient, layout, width, height, showHud = tutorial == null)
             }
             scheduleFrame()
         }
@@ -154,8 +174,9 @@ private class BrowserGame(
 
     private fun onPointerDown(event: PointerEvent) {
         if (!event.isPrimary || event.button.toInt() != 0 || activePointer != null || spaceHeld) return
+        if (tutorial?.cue == TutorialCue.COMPLETE) return
         event.preventDefault()
-        if (core.phase == GamePhase.PAUSED) {
+        if (tutorial == null && core.phase == GamePhase.PAUSED) {
             runAction()
             return
         }
@@ -182,9 +203,10 @@ private class BrowserGame(
 
     private fun onKeyDown(event: KeyboardEvent) {
         if (event.key == "Escape" && !event.repeat) {
-            when (core.phase) {
-                GamePhase.PLAYING -> pauseRun()
-                GamePhase.PAUSED -> runAction()
+            when {
+                tutorial != null -> leaveTutorial()
+                core.phase == GamePhase.PLAYING -> pauseRun()
+                core.phase == GamePhase.PAUSED -> runAction()
                 else -> return
             }
             event.preventDefault()
@@ -193,7 +215,8 @@ private class BrowserGame(
         if (event.code != "Space" || event.target is HTMLButtonElement || event.altKey || event.ctrlKey || event.metaKey) return
         event.preventDefault()
         if (event.repeat || activePointer != null || spaceHeld) return
-        if (core.phase == GamePhase.PAUSED) {
+        if (tutorial?.cue == TutorialCue.COMPLETE) return
+        if (tutorial == null && core.phase == GamePhase.PAUSED) {
             runAction()
             return
         }
@@ -211,6 +234,7 @@ private class BrowserGame(
     private fun beginPress(timestamp: Double) {
         if (soundOn) audio.unlock()
         if (core.phase != GamePhase.PLAYING) resetClock()
+        if (tutorial != null && core.phase == GamePhase.PAUSED) core.resume()
         pressStartedAt = timestamp
         core.beginPress()
         canvas.focus()
@@ -219,7 +243,9 @@ private class BrowserGame(
     }
 
     private fun endPress(timestamp: Double) {
-        core.endPress(((timestamp - pressStartedAt) / 1000).coerceAtLeast(0.0).toFloat())
+        val heldSeconds = ((timestamp - pressStartedAt) / 1000).coerceAtLeast(0.0).toFloat()
+        val practice = tutorial
+        if (practice == null) core.endPress(heldSeconds) else practice.endPress(heldSeconds)
         drainEvents()
     }
 
@@ -227,6 +253,34 @@ private class BrowserGame(
         core.cancelPress()
         spaceHeld = false
         releasePointer()
+    }
+
+    private fun startTutorial() {
+        cancelInput()
+        tutorial = FlightTutorial()
+        root.setAttribute("data-tutorial", "")
+        panel.hidden = true
+        tutorialGuide.hidden = false
+        tutorialExit.hidden = false
+        canvas.setAttribute("aria-describedby", "tutorial-instructions")
+        resetClock()
+        syncInterface()
+        canvas.focus()
+    }
+
+    private fun leaveTutorial() {
+        cancelInput()
+        tutorial = null
+        displayedTutorialCue = null
+        root.removeAttribute("data-tutorial")
+        tutorialGuide.hidden = true
+        tutorialExit.hidden = true
+        tutorialPlay.hidden = true
+        canvas.setAttribute("aria-describedby", "flight-help")
+        displayedPhase = null
+        resetClock()
+        syncInterface()
+        tutorialButton.focus()
     }
 
     private fun runAction() {
@@ -247,6 +301,7 @@ private class BrowserGame(
         if (core.phase != GamePhase.PLAYING) return
         core.pause()
         resetClock()
+        if (tutorial != null) cancelInput()
         syncInterface()
     }
 
@@ -256,8 +311,8 @@ private class BrowserGame(
     }
 
     private fun drainEvents() {
-        if (core.best > savedBest) {
-            savedBest = core.best
+        if (game.best > savedBest) {
+            savedBest = game.best
             writeSetting("best", savedBest.toString())
         }
         for (event in core.events) {
@@ -274,6 +329,19 @@ private class BrowserGame(
     }
 
     private fun syncInterface() {
+        val cue = tutorial?.cue
+        if (cue != null) {
+            if (cue != displayedTutorialCue) {
+                displayedTutorialCue = cue
+                tutorialHeading.textContent = cue.heading
+                tutorialInstructions.textContent = cue.instruction
+                if (cue == TutorialCue.COMPLETE) {
+                    tutorialPlay.hidden = false
+                    tutorialPlay.focus()
+                }
+            }
+            return
+        }
         val phase = core.phase
         if (phase == displayedPhase) return
         val previous = displayedPhase
@@ -281,6 +349,7 @@ private class BrowserGame(
         root.setAttribute("data-phase", phase.name.lowercase())
         panel.hidden = phase == GamePhase.PLAYING
         pause.hidden = phase != GamePhase.PLAYING
+        tutorialButton.hidden = phase != GamePhase.READY
         if (phase == GamePhase.PLAYING) return
 
         cancelInput()
