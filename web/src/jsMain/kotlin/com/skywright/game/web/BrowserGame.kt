@@ -349,7 +349,7 @@ private class BrowserGame(
         root.setAttribute("data-phase", phase.name.lowercase())
         panel.hidden = phase == GamePhase.PLAYING
         pause.hidden = phase != GamePhase.PLAYING
-        tutorialButton.hidden = phase != GamePhase.READY
+        tutorialButton.hidden = phase != GamePhase.READY && phase != GamePhase.OVER
         if (phase == GamePhase.PLAYING) return
 
         cancelInput()
