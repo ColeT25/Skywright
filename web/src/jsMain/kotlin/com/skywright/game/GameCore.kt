@@ -275,10 +275,9 @@ class GameCore(
         while (pulseIterator.hasNext()) {
             val pulse = pulseIterator.next()
             pulse.x += PULSE_SPEED * dt
-            val wall = walls.firstOrNull { it.id == pulse.targetId }
-            if (wall == null) {
-                pulseIterator.remove()
-            } else if (pulse.x >= wall.x) {
+            // Pulses reach their targets before walls can leave the screen.
+            val wall = walls.first { it.id == pulse.targetId }
+            if (pulse.x >= wall.x) {
                 if (wall.x > BIRD_X + BIRD_RADIUS && wall.gapCenter == null) {
                     if (abs(pulse.y - wall.weakCenter) <= wall.weakHalfHeight) {
                         wall.gapCenter = wall.weakCenter

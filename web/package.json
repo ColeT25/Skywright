@@ -6,7 +6,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:browser": "playwright test",
-    "test:coverage": "c8 --temp-directory \"$PWD/build/coverage/raw\" bash ../gradlew -p . --no-daemon --warning-mode fail jsNodeTest --rerun && node tests/verify-coverage.js"
+    "test:coverage": "c8 --temp-directory \"$PWD/build/coverage/raw\" bash ../gradlew -p . --no-daemon --warning-mode fail -Pkotlin.incremental.js.ir=false jsNodeTest --rerun && node tests/verify-coverage.js"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",

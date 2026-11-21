@@ -40,7 +40,9 @@ npm --prefix web run test:browser
 
 Use `bash ./gradlew -p web spotlessApply` to format Kotlin and `npm --prefix web run format` to format the handwritten web files. Kotlin compilation enables progressive mode and treats warnings as errors.
 
-The Node tests must cover at least 95% of lines in each of `GameCore.kt` and `ScreenLayout.kt`. The coverage check verifies that the JavaScript execution maps back to both Kotlin files and writes the report to `web/build/coverage/report/index.html`. Browser tests check keyboard and touch controls, pause and resume, and an offline reload.
+The Node tests must cover at least 95% of lines in each of `GameCore.kt` and `ScreenLayout.kt`. Coverage runs disable incremental Kotlin/JS linking so the source maps include unchanged Kotlin files. The check verifies that execution maps back to both files and writes the report to `web/build/coverage/report/index.html`.
+
+Browser tests cover keyboard and touch controls, clearing a wall and restarting, canceling a held shot by pausing, saving the sound setting, and reloading offline.
 
 ## Deploy
 
