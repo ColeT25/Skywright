@@ -15,6 +15,8 @@ Open `http://localhost:8000/`. Press Escape or use the pause button to pause. Th
 
 ## How to play
 
+Choose **Tutorial** from the start menu to practice flapping, gliding, and opening and clearing a wall before starting a scored run.
+
 - A quick tap flaps upward without firing. Gravity pulls you back down.
 - Keep a finger down for about a fifth of a second to unfold the moth's wings and glide. The glide slopes downward and gradually speeds up the passing walls; releasing eases the walls back to the current sunrise pace. A dashed line shows where a burst would go and turns cyan when aligned with a glowing band.
 - Release a glide to fire at the moth's height **at release**. The burst targets the nearest visible closed wall. A miss flashes red; a hit cuts a fixed doorway **centered on that wall's target marker**. Only one burst can be in flight, and the gust takes 0.9 seconds to recharge.

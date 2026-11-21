@@ -43,6 +43,7 @@ internal class BrowserRenderer(
         layout: ScreenLayout,
         width: Int,
         height: Int,
+        showHud: Boolean,
     ) {
         ctx.setTransform(
             ctx.canvas.width.toDouble() / width,
@@ -73,7 +74,7 @@ internal class BrowserRenderer(
         drawMoth(core, ambient)
         ctx.restore()
 
-        if (core.phase == GamePhase.PLAYING) {
+        if (showHud && core.phase == GamePhase.PLAYING) {
             ctx.translate(0.0, layout.hudShift.toDouble())
             drawHud(core)
         }
