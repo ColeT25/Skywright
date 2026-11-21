@@ -42,9 +42,14 @@ test("completes the tutorial without adding practice points to the best score", 
   }
   await expect(cue).toContainText("Tutorial complete");
 
-  const play = page.getByRole("button", { name: "Play", exact: true });
-  await expect(play).toBeFocused();
-  await play.press("Enter");
+  const chooseLevel = page.getByRole("button", { name: "Choose a level" });
+  await expect(chooseLevel).toBeFocused();
+  await chooseLevel.press("Enter");
+  await page.getByRole("button", { name: "Back", exact: true }).press("Enter");
+  await expect(page.locator("#details")).toContainText("Endless best 0");
+  await page
+    .getByRole("button", { name: "Endless", exact: true })
+    .press("Enter");
   await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
   await expect(cue).toBeHidden();
   await page.clock.runFor(1600);

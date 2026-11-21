@@ -1,6 +1,6 @@
 # Skywright
 
-Skywright is a browser arcade game about a moth flying through sealed paper walls. Tap, click, or press Space to flap. Hold to glide and aim, then release an air burst through a glowing band. Survive five minutes to reach sunrise.
+Skywright is a browser arcade game about a moth flying through sealed paper walls. Tap, click, or press Space to flap. Hold to glide and aim, then release an air burst through a glowing band.
 
 ## Run locally
 
@@ -17,15 +17,16 @@ Open `http://localhost:8000/`. Press Escape or use the pause button to pause. Th
 
 Choose **Tutorial** from the start menu or the loss screen to practice flapping, gliding, and clearing a wall.
 
+- **Levels** starts with First Flight, followed by Paper Maze and Crosswinds. Clear the last wall to unlock the next level. Retrying keeps the same layout.
+- **Endless** continues through procedural walls until you crash. Difficulty increases for the first five minutes of active play, then stays at the sunrise pace. Each wall you clear counts toward your Endless best.
 - A quick tap flaps upward without firing. Gravity pulls you back down.
-- Keep a finger down for about a fifth of a second to unfold the moth's wings and glide. The glide slopes downward and gradually speeds up the passing walls; releasing eases the walls back to the current sunrise pace. A dashed line shows where a burst would go and turns cyan when aligned with a glowing band.
+- Keep a finger down for about a fifth of a second to unfold the moth's wings and glide. The glide slopes downward and gradually speeds up the passing walls. Releasing eases the walls back to the current pace. A dashed line shows where a burst would go and turns cyan when aligned with a glowing band.
 - Release a glide to fire at the moth's height **at release**. The burst targets the nearest visible closed wall. A miss flashes red; a hit cuts a fixed doorway **centered on that wall's target marker**. Only one burst can be in flight, and the gust takes 0.9 seconds to recharge.
-- Releasing when no closed wall is visible or the gust is recharging simply ends the glide. The charge bar below the sunrise meter shows when another burst is ready.
-- Fly through doorways to score. Breakable bands and doorways narrow as dawn approaches, while the walls move faster. Each wall keeps the width it had when it appeared.
-- After the opening stretch, marked updrafts and downdrafts may appear between walls. Their arrows show which way the wind will carry the moth. Gusts become slightly more common toward sunrise, never appear in consecutive wall gaps, and leave extra room to recover before the following wall.
+- Releasing when no closed wall is visible or the gust is recharging simply ends the glide. The charge bar shows when another burst is ready.
+- Fly through doorways to score. In Endless, newly generated walls get narrower openings and move faster as dawn approaches.
+- Marked updrafts and downdrafts push the moth in the direction of their arrows. Crosswinds places them at fixed points. In Endless, wind can spawn after the first 25 seconds and becomes more common toward sunrise.
 - On tall phones, the sky and foreground extend to the edges while the moth, walls, and controls keep their familiar scale. The HUD moves into the extra top space while avoiding display cutouts.
-- Survive five minutes of active play to raise the sun fully and win. A collision ends the current run and restarts the sunrise on the next attempt.
-- Tap the pause icon in the top-right corner during a run. Sound and vibration switches are on the menu, pause, and result screens. Best score and settings stay on the device.
+- A collision ends the current run. Tap the pause icon in the top-right corner to pause. Level unlocks, the Endless best score, and settings stay on the device.
 
 ## Quality checks
 

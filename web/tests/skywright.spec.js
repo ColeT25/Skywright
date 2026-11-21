@@ -5,7 +5,7 @@ async function startWithHeldSpace(page) {
   await page.clock.pauseAt(new Date("2026-01-01T00:01:00Z"));
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Play", exact: true }),
+    page.getByRole("button", { name: "Endless", exact: true }),
   ).toBeEnabled();
   await page.keyboard.down("Space");
   await page.clock.runFor(240);
@@ -23,7 +23,7 @@ async function flyTowardFirstWall(page) {
 test("starts, pauses, and resumes with the keyboard", async ({ page }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Play", exact: true }),
+    page.getByRole("button", { name: "Endless", exact: true }),
   ).toBeEnabled();
   await page.keyboard.press("Space");
   await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
@@ -105,7 +105,7 @@ test.describe("phone viewport", () => {
   }) => {
     await page.goto("/");
     await expect(
-      page.getByRole("button", { name: "Play", exact: true }),
+      page.getByRole("button", { name: "Endless", exact: true }),
     ).toBeEnabled();
     await page.locator("#sky").tap({ position: { x: 12, y: 20 } });
     await expect(page.locator("#game")).toHaveAttribute(
@@ -129,7 +129,7 @@ test("reloads and starts a run offline after the cache is ready", async ({
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Play", exact: true }),
+    page.getByRole("button", { name: "Endless", exact: true }),
   ).toBeEnabled();
   await expect
     .poll(() =>
@@ -144,6 +144,6 @@ test("reloads and starts a run offline after the cache is ready", async ({
     page.getByRole("heading", { name: "Flap", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Exit tutorial" }).click();
-  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("button", { name: "Endless", exact: true }).click();
   await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
 });

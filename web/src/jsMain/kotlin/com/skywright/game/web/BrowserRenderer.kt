@@ -343,10 +343,18 @@ internal class BrowserRenderer(
     }
 
     private fun drawHud(core: GameCore) {
-        label("DAWN", 47f, 22f, 10f, cyan, bodyFace)
-        val seconds = core.secondsToDawn()
-        label("${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}", 47f, 43f, 17f, cream, titleFace)
-        label("${core.score}", 180f, 35f, 29f, cream, titleFace)
+        val level = core.level
+        if (level == null) {
+            val seconds = core.secondsToDawn()
+            val time = if (seconds == 0) "Sunrise" else "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+            label(if (seconds == 0) "ENDLESS" else "DAWN", 47f, 22f, 10f, cyan, bodyFace)
+            label(time, 47f, 43f, 17f, cream, titleFace)
+        } else {
+            label("LEVEL", 47f, 22f, 10f, cyan, bodyFace)
+            label("${level.ordinal + 1}", 47f, 43f, 17f, cream, titleFace)
+        }
+        val score = if (level == null) "${core.score}" else "${core.score}/${level.wallCount}"
+        label(score, 180f, 35f, 29f, cream, titleFace)
         fill(cream, 45)
         roundRect(108f, 47f, 272f, 52f, 3f)
         fill(gold)

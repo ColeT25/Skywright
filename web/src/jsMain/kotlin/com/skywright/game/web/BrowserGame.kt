@@ -1,5 +1,6 @@
 package com.skywright.game.web
 
+import com.skywright.game.FlightLevel
 import com.skywright.game.GameCore
 import com.skywright.game.GameEvent
 import com.skywright.game.GamePhase
@@ -38,6 +39,12 @@ private class BrowserGame(
     private val root = element<HTMLElement>("game")
     private val topInset = element<HTMLElement>("safe-inset")
     private val action = element<HTMLButtonElement>("action")
+    private val levelsButton = element<HTMLButtonElement>("levels")
+    private val mainMenu = element<HTMLButtonElement>("main-menu")
+    private val levelPicker = element<HTMLElement>("level-picker")
+    private val levelHeading = element<HTMLElement>("level-heading")
+    private val levelOptions = element<HTMLElement>("level-options")
+    private val levelBack = element<HTMLButtonElement>("level-back")
     private val tutorialButton = element<HTMLButtonElement>("tutorial-start")
     private val tutorialExit = element<HTMLButtonElement>("tutorial-exit")
     private val tutorialGuide = element<HTMLElement>("tutorial-guide")
@@ -58,13 +65,23 @@ private class BrowserGame(
     private val details = element<HTMLElement>("details")
     private val canVibrate = jsTypeOf(window.navigator.asDynamic().vibrate) == "function"
 
-    private val game = GameCore().apply { best = readSetting("best")?.toIntOrNull()?.coerceAtLeast(0) ?: 0 }
+    private var savedBest = readSetting("best")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+    private var unlockedLevels = readSetting("levels-unlocked")?.toIntOrNull()?.coerceIn(1, FlightLevel.entries.size) ?: 1
+    private var game = GameCore().apply { best = savedBest }
+    private val levelButtons =
+        FlightLevel.entries.map { level ->
+            (document.createElement("button") as HTMLButtonElement).apply {
+                type = "button"
+                className = "secondary"
+                addEventListener("click", { startLevel(level) })
+                levelOptions.appendChild(this)
+            }
+        }
     private var tutorial: FlightTutorial? = null
     private val core: GameCore get() = tutorial?.core ?: game
     private val audio = BrowserAudio()
     private var soundOn = readSetting("sound") != "false"
     private var vibrationOn = readSetting("vibration") != "false"
-    private var savedBest = core.best
     private var displayedPhase: GamePhase? = null
     private var displayedTutorialCue: TutorialCue? = null
     private var activePointer: Int? = null
@@ -79,6 +96,7 @@ private class BrowserGame(
 
     init {
         action.disabled = false
+        levelsButton.disabled = false
         tutorialButton.disabled = false
         sound.disabled = false
         vibration.hidden = !canVibrate
@@ -86,11 +104,14 @@ private class BrowserGame(
         updateSettingButton(vibration, vibrationOn)
 
         action.addEventListener("click", { runAction() })
+        levelsButton.addEventListener("click", { showLevels() })
+        levelBack.addEventListener("click", { closeLevels() })
+        mainMenu.addEventListener("click", { showMainMenu() })
         tutorialButton.addEventListener("click", { startTutorial() })
         tutorialExit.addEventListener("click", { leaveTutorial() })
         tutorialPlay.addEventListener("click", {
             leaveTutorial()
-            runAction()
+            if (game.phase == GamePhase.READY) showLevels() else runAction()
         })
         pause.addEventListener("click", { pauseRun() })
         sound.addEventListener("click", {
@@ -173,10 +194,11 @@ private class BrowserGame(
     }
 
     private fun onPointerDown(event: PointerEvent) {
+        if (!levelPicker.hidden) return
         if (!event.isPrimary || event.button.toInt() != 0 || activePointer != null || spaceHeld) return
         if (tutorial?.cue == TutorialCue.COMPLETE) return
         event.preventDefault()
-        if (tutorial == null && core.phase == GamePhase.PAUSED) {
+        if (tutorial == null && (core.phase == GamePhase.PAUSED || core.phase == GamePhase.WON)) {
             runAction()
             return
         }
@@ -205,6 +227,7 @@ private class BrowserGame(
         if (event.key == "Escape" && !event.repeat) {
             when {
                 tutorial != null -> leaveTutorial()
+                !levelPicker.hidden -> closeLevels()
                 core.phase == GamePhase.PLAYING -> pauseRun()
                 core.phase == GamePhase.PAUSED -> runAction()
                 else -> return
@@ -212,11 +235,12 @@ private class BrowserGame(
             event.preventDefault()
             return
         }
+        if (!levelPicker.hidden) return
         if (event.code != "Space" || event.target is HTMLButtonElement || event.altKey || event.ctrlKey || event.metaKey) return
         event.preventDefault()
         if (event.repeat || activePointer != null || spaceHeld) return
         if (tutorial?.cue == TutorialCue.COMPLETE) return
-        if (tutorial == null && core.phase == GamePhase.PAUSED) {
+        if (tutorial == null && (core.phase == GamePhase.PAUSED || core.phase == GamePhase.WON)) {
             runAction()
             return
         }
@@ -255,6 +279,39 @@ private class BrowserGame(
         releasePointer()
     }
 
+    private fun showLevels() {
+        cancelInput()
+        levelButtons.forEachIndexed { index, button ->
+            val title = FlightLevel.entries[index].title
+            button.disabled = index >= unlockedLevels
+            button.textContent = if (button.disabled) "$title (locked)" else title
+        }
+        panel.hidden = true
+        levelPicker.hidden = false
+        levelHeading.focus()
+    }
+
+    private fun closeLevels() {
+        levelPicker.hidden = true
+        panel.hidden = false
+        levelsButton.focus()
+    }
+
+    private fun startLevel(level: FlightLevel) {
+        levelPicker.hidden = true
+        game = GameCore(level = level)
+        runAction()
+    }
+
+    private fun showMainMenu() {
+        cancelInput()
+        game = GameCore().apply { best = savedBest }
+        displayedPhase = null
+        resetClock()
+        syncInterface()
+        levelsButton.focus()
+    }
+
     private fun startTutorial() {
         cancelInput()
         tutorial = FlightTutorial()
@@ -262,6 +319,7 @@ private class BrowserGame(
         panel.hidden = true
         tutorialGuide.hidden = false
         tutorialExit.hidden = false
+        tutorialPlay.textContent = if (game.phase == GamePhase.READY) "Choose a level" else "Fly again"
         canvas.setAttribute("aria-describedby", "tutorial-instructions")
         resetClock()
         syncInterface()
@@ -288,7 +346,16 @@ private class BrowserGame(
         when (core.phase) {
             GamePhase.READY -> core.start()
             GamePhase.PAUSED -> core.resume()
-            GamePhase.OVER, GamePhase.WON -> core.restart()
+            GamePhase.OVER -> core.restart()
+            GamePhase.WON -> {
+                val next = game.level?.next
+                if (next == null) {
+                    core.restart()
+                } else {
+                    game = GameCore(level = next)
+                    game.start()
+                }
+            }
             GamePhase.PLAYING -> return
         }
         resetClock()
@@ -314,6 +381,11 @@ private class BrowserGame(
         if (game.best > savedBest) {
             savedBest = game.best
             writeSetting("best", savedBest.toString())
+        }
+        val next = game.level?.next
+        if (next != null && next.ordinal >= unlockedLevels && GameEvent.WIN in game.events) {
+            unlockedLevels = next.ordinal + 1
+            writeSetting("levels-unlocked", unlockedLevels.toString())
         }
         for (event in core.events) {
             if (soundOn) audio.play(event)
@@ -349,6 +421,8 @@ private class BrowserGame(
         root.setAttribute("data-phase", phase.name.lowercase())
         panel.hidden = phase == GamePhase.PLAYING
         pause.hidden = phase != GamePhase.PLAYING
+        levelsButton.hidden = phase != GamePhase.READY
+        mainMenu.hidden = phase == GamePhase.READY || phase == GamePhase.PLAYING
         tutorialButton.hidden = phase != GamePhase.READY && phase != GamePhase.OVER
         if (phase == GamePhase.PLAYING) return
 
@@ -356,12 +430,13 @@ private class BrowserGame(
         introMark.hidden = phase != GamePhase.READY
         help.hidden = phase != GamePhase.READY
         results.hidden = phase != GamePhase.OVER && phase != GamePhase.WON
+        action.className = if (phase == GamePhase.READY) "secondary" else "action"
         when (phase) {
             GamePhase.READY -> {
-                eyebrow.textContent = "Survive to sunrise"
+                eyebrow.textContent = "Choose your flight"
                 heading.textContent = "Skywright"
-                action.textContent = "Play"
-                details.textContent = "5:00 to sunrise · Best ${core.best}"
+                action.textContent = "Endless"
+                details.textContent = "Endless best $savedBest"
             }
             GamePhase.PAUSED -> {
                 eyebrow.textContent = "Flight on hold"
@@ -371,12 +446,20 @@ private class BrowserGame(
             }
             GamePhase.OVER, GamePhase.WON -> {
                 val won = phase == GamePhase.WON
-                eyebrow.textContent = if (won) "You reached sunrise" else "Run ended"
-                heading.textContent = if (won) "Daybreak" else "Sky closed"
+                val level = game.level
+                eyebrow.textContent = if (won) "Flight complete" else "Run ended"
+                heading.textContent = if (won) "Level clear" else "Sky closed"
                 score.textContent = core.score.toString()
-                scoreCaption.textContent = if (core.score == 1) "Wall cleared" else "Walls cleared"
-                action.textContent = "Fly again"
-                details.textContent = "Sunrise ${(core.dawnProgress() * 100).toInt()}% · Best ${core.best}"
+                scoreCaption.textContent =
+                    if (level != null) {
+                        "of ${level.wallCount} walls cleared"
+                    } else if (core.score == 1) {
+                        "Wall cleared"
+                    } else {
+                        "Walls cleared"
+                    }
+                action.textContent = if (won && level?.next != null) "Next level" else "Fly again"
+                details.textContent = level?.title ?: "Sunrise ${(core.dawnProgress() * 100).toInt()}% · Best $savedBest"
             }
             GamePhase.PLAYING -> Unit
         }
