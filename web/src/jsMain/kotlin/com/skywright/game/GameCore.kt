@@ -51,7 +51,8 @@ data class WindGust(
 /** Fixed-step simulation driven by the browser game loop. */
 class GameCore(
     private val random: Random = Random(19),
-    private val winSeconds: Float = 300f,
+    private val dawnSeconds: Float = 300f,
+    val level: FlightLevel? = null,
 ) {
     companion object {
         const val WIDTH = 360f
@@ -75,11 +76,10 @@ class GameCore(
         const val GUST_DRIFT = 205f
         const val GUST_RECOVERY_DISTANCE = 350f
         private const val GUST_LEAD = 82f
-        private const val WIN_TIME_TOLERANCE = 1e-9
     }
 
     init {
-        require(winSeconds > 0f)
+        require(dawnSeconds > 0f)
     }
 
     var phase = GamePhase.READY
@@ -122,15 +122,15 @@ class GameCore(
         reset()
     }
 
-    fun dawnProgress(): Float = (elapsed / winSeconds).coerceIn(0f, 1f)
+    fun dawnProgress(): Float = level?.let { score.toFloat() / it.wallCount } ?: (elapsed / dawnSeconds).coerceIn(0f, 1f)
 
     fun gustChance(): Float = if (elapsed < 25f) 0f else 0.06f + 0.10f * dawnProgress()
 
-    fun baseWallSpeed(): Float = 110f + 100f * dawnProgress()
+    fun baseWallSpeed(): Float = level?.speed ?: (110f + 100f * dawnProgress())
 
     fun wallSpeed(): Float = baseWallSpeed() + glideBoost
 
-    fun secondsToDawn(): Int = kotlin.math.ceil((winSeconds - elapsed).coerceAtLeast(0f)).toInt()
+    fun secondsToDawn(): Int = kotlin.math.ceil((dawnSeconds - elapsed).coerceAtLeast(0f)).toInt()
 
     fun reset() {
         phase = GamePhase.READY
@@ -152,9 +152,26 @@ class GameCore(
         events.clear()
         nextWallId = 0
         lastGapHadGust = false
-        val introCenters = floatArrayOf(350f, 392f, 328f)
-        repeat(3) { index ->
-            walls += Wall(nextWallId++, 340f + index * 400f, weakCenter = introCenters[index])
+        if (level == null) {
+            val introCenters = floatArrayOf(350f, 392f, 328f)
+            repeat(3) { index ->
+                walls += Wall(nextWallId++, 340f + index * 400f, weakCenter = introCenters[index])
+            }
+        } else {
+            level.walls.forEach { wall ->
+                val id = nextWallId++
+                walls +=
+                    Wall(
+                        id,
+                        wall.x,
+                        weakCenter = wall.center,
+                        weakHalfHeight = level.openingHeight / 2f - 2f,
+                        openingHeight = level.openingHeight,
+                    )
+                if (wall.wind != 0) {
+                    gusts += WindGust(wall.x - GUST_RECOVERY_DISTANCE - GUST_WIDTH, GUST_WIDTH, wall.wind, id)
+                }
+            }
         }
     }
 
@@ -315,12 +332,20 @@ class GameCore(
             if (!wall.scored && wall.x + WALL_WIDTH < BIRD_X - BIRD_RADIUS) {
                 wall.scored = true
                 score++
-                best = max(best, score)
+                if (level == null) best = max(best, score)
                 events += GameEvent.SCORE
             }
         }
         walls.removeAll { it.x + WALL_WIDTH < -40f }
         gusts.removeAll { it.x + it.width < -40f }
+        if (level != null) {
+            if (score == level.wallCount) {
+                cancelPress()
+                phase = GamePhase.WON
+                events += GameEvent.WIN
+            }
+            return
+        }
         while (walls.last().x < WIDTH + 560f) {
             val progress = dawnProgress()
             val chance = gustChance()
@@ -353,13 +378,6 @@ class GameCore(
                     openingHeight = 164f - 32f * progress,
                 )
             lastGapHadGust = gustBeforeWall
-        }
-        // Absorb rounding at the fixed-step deadline on both JVM and JavaScript.
-        if (elapsedSeconds + WIN_TIME_TOLERANCE >= winSeconds) {
-            elapsedSeconds = winSeconds.toDouble()
-            cancelPress()
-            phase = GamePhase.WON
-            events += GameEvent.WIN
         }
     }
 

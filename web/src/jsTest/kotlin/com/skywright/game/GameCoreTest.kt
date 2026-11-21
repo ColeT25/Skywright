@@ -245,27 +245,31 @@ class GameCoreTest {
         assertTrue(game.score >= 3)
     }
 
-    @Test fun sunriseAdvancesWithPlayTimeAndEndsTheRunAtFiveMinuteEquivalent() {
-        val game = GameCore(winSeconds = 0.5f)
+    @Test fun sunriseCapsTheDifficultyWithoutEndingEndlessFlight() {
+        val game = GameCore(dawnSeconds = 0.5f)
         assertEquals(110f, game.wallSpeed(), 0.001f)
         game.start()
-        repeat(30) { game.update(1f / 60f) }
-        assertEquals(GamePhase.WON, game.phase)
+        repeat(40) { game.update(1f / 60f) }
+        assertEquals(GamePhase.PLAYING, game.phase)
+        assertTrue(game.elapsed > 0.5f)
         assertEquals(1f, game.dawnProgress(), 0.001f)
+        assertEquals(0, game.secondsToDawn())
         assertEquals(210f, game.wallSpeed(), 0.001f)
-        assertTrue(GameEvent.WIN in game.events)
+        assertFalse(GameEvent.WIN in game.events)
     }
 
-    @Test fun aGuidedRouteCanReachTheActualFiveMinuteSunrise() {
+    @Test fun aGuidedRouteCanKeepScoringPastTheFiveMinuteSunrise() {
         val game = GameCore()
         game.start()
         var failureState = ""
         var heldFrames = 0
+        var sunriseScore: Int? = null
         val encounteredGusts = mutableSetOf<Int>()
-        repeat(18_100) { frame ->
+        repeat(18_800) { frame ->
             if (game.phase == GamePhase.PLAYING) {
                 heldFrames = guide(game, frame, heldFrames)
                 game.update(1f / 60f)
+                if (sunriseScore == null && game.dawnProgress() == 1f) sunriseScore = game.score
                 game.gusts.filter { it.x <= GameCore.BIRD_X }.forEach { encounteredGusts += it.nextWallId }
                 if (game.phase == GamePhase.OVER) {
                     failureState =
@@ -273,10 +277,49 @@ class GameCoreTest {
                 }
             }
         }
-        assertEquals(GamePhase.WON, game.phase, failureState)
-        assertTrue(game.score > 100)
+        assertEquals(GamePhase.PLAYING, game.phase, failureState)
+        assertTrue(game.score > checkNotNull(sunriseScore))
         assertTrue(encounteredGusts.isNotEmpty(), "The route must exercise wind, not just ordinary walls")
         assertEquals(0.16f, game.gustChance(), 0.001f)
+    }
+
+    @Test fun everyLevelCanBeClearedThroughItsFinalWall() {
+        for (level in FlightLevel.entries) {
+            val game = GameCore(level = level)
+            game.start()
+            var heldFrames = 0
+            var failureState = level.title
+            repeat(2_700) { frame ->
+                if (game.phase == GamePhase.PLAYING) {
+                    heldFrames = guide(game, frame, heldFrames)
+                    game.update(1f / 60f)
+                    if (game.phase == GamePhase.OVER) {
+                        failureState = "${level.title} frame=$frame score=${game.score} y=${game.birdY} wall=${game.walls.firstOrNull()}"
+                    }
+                }
+            }
+            assertEquals(GamePhase.WON, game.phase, failureState)
+            assertEquals(level.wallCount, game.score)
+            assertEquals(0, game.best)
+            assertEquals(1, game.events.count { it == GameEvent.WIN })
+        }
+    }
+
+    @Test fun retryRestoresTheAuthoredWallsAndBothWindDirections() {
+        val game = GameCore(level = FlightLevel.CROSSWINDS)
+        val initialWalls = game.walls.map { it.copy() }
+        val initialGusts = game.gusts.map { it.copy() }
+        assertEquals(listOf(-1, 1), initialGusts.map { it.direction })
+        game.start()
+        repeat(90) { game.update(1f / 60f) }
+        assertEquals(GamePhase.OVER, game.phase)
+
+        game.restart()
+
+        assertEquals(GamePhase.PLAYING, game.phase)
+        assertEquals(initialWalls, game.walls)
+        assertEquals(initialGusts, game.gusts)
+        assertEquals(0, game.score)
     }
 
     /** A simple one-thumb controller: quick flaps for height, a real 0.2 s hold to aim. */

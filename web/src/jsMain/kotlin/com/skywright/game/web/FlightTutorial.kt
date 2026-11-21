@@ -14,7 +14,7 @@ internal enum class TutorialCue(
     RETRY_SHOT("Try the shot again", "Hold to aim, then let go when the line turns cyan."),
     CLEAR("Fly through", "Tap or press Space to continue. Flap when the moth drops toward the bottom of the gap."),
     RETRY_CLEAR("Try the gap again", "Stay inside the opening. Flap as the moth approaches the lower edge."),
-    COMPLETE("Tutorial complete", "Each wall you clear earns a point. Survive five minutes to reach sunrise."),
+    COMPLETE("Tutorial complete", "Clear the last wall to finish a level. In Endless, every wall earns a point."),
 }
 
 /** Runs practice attempts with the same inputs, physics, and scoring as a regular flight. */

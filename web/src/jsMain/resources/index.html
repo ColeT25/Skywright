@@ -40,7 +40,7 @@
       <section id="panel" class="panel" aria-labelledby="title">
         <div id="intro-mark" class="gate" aria-hidden="true"><span></span></div>
         <div>
-          <p id="eyebrow" class="eyebrow">Survive to sunrise</p>
+          <p id="eyebrow" class="eyebrow">Choose your flight</p>
           <h1 id="title" tabindex="-1">Skywright</h1>
         </div>
         <p id="flight-help" class="flight-help">
@@ -52,14 +52,20 @@
           <span id="score-caption"></span>
         </div>
         <div class="menu-actions">
-          <button id="action" class="action" type="button" disabled>
-            Play
+          <button id="levels" class="action" type="button" disabled>
+            Levels
+          </button>
+          <button id="action" class="secondary" type="button" disabled>
+            Endless
           </button>
           <button id="tutorial-start" class="secondary" type="button" disabled>
             Tutorial
           </button>
+          <button id="main-menu" class="secondary" type="button" hidden>
+            Main menu
+          </button>
         </div>
-        <p id="details" class="details">5:00 to sunrise · Best 0</p>
+        <p id="details" class="details">Endless best 0</p>
         <div class="settings" aria-label="Game settings" role="group">
           <button id="sound" type="button" aria-pressed="true" disabled>
             Sound <span aria-hidden="true">on</span>
@@ -68,6 +74,17 @@
             Vibration <span aria-hidden="true">on</span>
           </button>
         </div>
+      </section>
+      <section
+        id="level-picker"
+        class="panel"
+        aria-labelledby="level-heading"
+        hidden
+      >
+        <h1 id="level-heading" tabindex="-1">Levels</h1>
+        <p class="flight-help">Clear a level to unlock the next one.</p>
+        <div id="level-options" class="menu-actions"></div>
+        <button id="level-back" class="secondary" type="button">Back</button>
       </section>
       <button
         id="tutorial-exit"
@@ -88,7 +105,7 @@
           <p id="tutorial-instructions"></p>
         </div>
         <button id="tutorial-play" class="action" type="button" hidden>
-          Play
+          Choose a level
         </button>
       </section>
       <noscript>Enable JavaScript to play Skywright.</noscript>
