@@ -4,6 +4,23 @@
 
 ![Skywright menu on a tall Android screen](docs/responsive-menu-v1.4.png)
 
+## Play in a browser
+
+The web edition supports touch, mouse, and Space. Tap to flap, hold to glide, and release to fire. Press Escape or use the pause button to pause. Best scores and settings are saved in the current browser.
+
+Build the web edition from the repository root with Java 17 or newer and Node.js with npm. The Android SDK is unnecessary for this build.
+
+```sh
+bash ./gradlew -p web jsNodeTest jsBrowserDistribution
+python3 -m http.server 8000 --bind 127.0.0.1 --directory web/build/site
+```
+
+Open `http://localhost:8000/`. The web build compiles the same Kotlin game core and layout used by Android and runs the shared regression suite on JavaScript.
+
+To publish on Cloudflare Pages, upload the contents of `web/build/site` to a Direct Upload project. The site is static and works on the free plan at the generated `pages.dev` address. On HTTPS or localhost, the browser caches the game for offline play after the first successful load. Supported browsers can also add Skywright to the home screen. [Cloudflare Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/)
+
+For automatic deployments, create a Git-integrated Cloudflare Pages project with no framework preset. Leave the root directory blank, use `bash web/build-cloudflare.sh` as the build command, and set the output directory to `web/build/site`. The script downloads Eclipse Temurin JDK 21.0.13.1+2 and checks its SHA-256 before running Gradle. [Cloudflare Git integration](https://developers.cloudflare.com/pages/get-started/git-integration/) · [Temurin release](https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.13.1%2B2)
+
 ## Download and install
 
 Download the signed [Skywright v1.4 APK](https://github.com/ColeT25/Skywright/releases/download/v1.4/Skywright-v1.4.apk) on an Android phone running Android 8.0 or newer. Open the downloaded file and allow installation from that source if Android asks. The APK installs directly; it does not require a Play Store account or an internet connection to play. Version 1.4 uses the same signing key as earlier releases, so it can install as an update.
