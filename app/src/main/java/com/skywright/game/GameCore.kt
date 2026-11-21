@@ -51,6 +51,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         const val GUST_DRIFT = 205f
         const val GUST_RECOVERY_DISTANCE = 350f
         private const val GUST_LEAD = 82f
+        private const val WIN_TIME_TOLERANCE = 1e-9
     }
 
     init { require(winSeconds > 0f) }
@@ -64,8 +65,8 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
     var score = 0
         private set
     var best = 0
-    var elapsed = 0f
-        private set
+    private var elapsedSeconds = 0.0
+    val elapsed: Float get() = elapsedSeconds.toFloat()
     var distanceTravelled = 0f
         private set
     var guideY = 350f
@@ -104,7 +105,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
         birdY = 350f
         birdVy = 0f
         score = 0
-        elapsed = 0f
+        elapsedSeconds = 0.0
         distanceTravelled = 0f
         guideLife = 0f
         pressed = false
@@ -204,7 +205,7 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
 
     fun update(dt: Float) {
         if (phase != GamePhase.PLAYING || dt <= 0f) return
-        elapsed += dt
+        elapsedSeconds += dt
         guideLife = max(0f, guideLife - dt)
         shotCooldown = max(0f, shotCooldown - dt)
         if (pressed && !gliding) {
@@ -310,7 +311,9 @@ class GameCore(private val random: Random = Random(19), private val winSeconds: 
             )
             lastGapHadGust = gustBeforeWall
         }
-        if (elapsed >= winSeconds) {
+        // Absorb rounding at the fixed-step deadline on both JVM and JavaScript.
+        if (elapsedSeconds + WIN_TIME_TOLERANCE >= winSeconds) {
+            elapsedSeconds = winSeconds.toDouble()
             cancelPress()
             phase = GamePhase.WON
             events += GameEvent.WIN
