@@ -313,3 +313,13 @@ button:disabled {
     display: none;
   }
 }
+
+@media (max-height: 520px) and (min-width: 560px) {
+  #game[data-phase="ready"] #panel .menu-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #levels {
+    grid-column: 1 / -1;
+  }
+}
