@@ -34,7 +34,7 @@ test("starts, pauses, and resumes with the keyboard", async ({ page }) => {
   await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
 });
 
-test("opens the first wall, scores, and starts a fresh run", async ({
+test("clears the first wall and keeps the result after visiting the tutorial", async ({
   page,
 }) => {
   await startWithHeldSpace(page);
@@ -47,6 +47,18 @@ test("opens the first wall, scores, and starts a fresh run", async ({
   await expect(page.getByRole("heading", { name: "Sky closed" })).toBeVisible();
   await expect(page.locator("#score")).toHaveText("1");
   await expect(page.locator("#details")).toContainText("Best 1");
+
+  const tutorial = page.getByRole("button", { name: "Tutorial", exact: true });
+  await tutorial.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "Flap", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Sky closed" })).toBeVisible();
+  await expect(page.locator("#score")).toHaveText("1");
+  await expect(page.locator("#details")).toContainText("Best 1");
+  await expect(tutorial).toBeFocused();
+
   await page.getByRole("button", { name: "Fly again" }).press("Enter");
   await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
 
