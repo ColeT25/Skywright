@@ -1,0 +1,8 @@
+{
+  "overrides": [
+    {
+      "files": "*.webmanifest",
+      "options": { "parser": "json" }
+    }
+  ]
+}

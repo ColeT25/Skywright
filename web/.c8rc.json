@@ -1,0 +1,15 @@
+{
+  "reports-dir": "build/coverage/report",
+  "reporter": ["text", "html", "json"],
+  "extension": [".js", ".kt"],
+  "exclude-after-remap": true,
+  "allowExternal": true,
+  "all": true,
+  "check-coverage": true,
+  "per-file": true,
+  "lines": 95,
+  "include": [
+    "**/src/jsMain/kotlin/com/skywright/game/{GameCore,ScreenLayout}.kt",
+    "../../../../../src/jsMain/kotlin/com/skywright/game/{GameCore,ScreenLayout}.kt"
+  ]
+}
