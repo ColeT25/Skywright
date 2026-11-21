@@ -1,31 +1,17 @@
 # Skywright
 
-**Make the gap. Then make it through.** Skywright is a one-thumb Android arcade game about a moth flying through sealed paper walls. Tap to flap, hold to glide and aim, then release to send an air burst through a wall's glowing breakable band. Survive until sunrise to win.
+Skywright is a browser arcade game about a moth flying through sealed paper walls. Tap, click, or press Space to flap. Hold to glide and aim, then release an air burst through a glowing band. Survive five minutes to reach sunrise.
 
-![Skywright menu on a tall Android screen](docs/responsive-menu-v1.4.png)
+## Run locally
 
-## Play in a browser
-
-The web edition supports touch, mouse, and Space. Tap to flap, hold to glide, and release to fire. Press Escape or use the pause button to pause. Best scores and settings are saved in the current browser.
-
-Build the web edition from the repository root with Java 17 or newer and Node.js with npm. The Android SDK is unnecessary for this build.
+From the repository root, use Java 21, Node.js 24 with npm, and Python 3.
 
 ```sh
 bash ./gradlew -p web jsNodeTest jsBrowserDistribution
 python3 -m http.server 8000 --bind 127.0.0.1 --directory web/build/site
 ```
 
-Open `http://localhost:8000/`. The web build compiles the same Kotlin game core and layout used by Android and runs the shared regression suite on JavaScript.
-
-To publish on Cloudflare Pages, upload the contents of `web/build/site` to a Direct Upload project. The site is static and works on the free plan at the generated `pages.dev` address. On HTTPS or localhost, the browser caches the game for offline play after the first successful load. Supported browsers can also add Skywright to the home screen. [Cloudflare Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/)
-
-For automatic deployments, create a Git-integrated Cloudflare Pages project with no framework preset. Leave the root directory blank, use `bash web/build-cloudflare.sh` as the build command, and set the output directory to `web/build/site`. The script downloads Eclipse Temurin JDK 21.0.13.1+2 and checks its SHA-256 before running Gradle. [Cloudflare Git integration](https://developers.cloudflare.com/pages/get-started/git-integration/) · [Temurin release](https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.13.1%2B2)
-
-## Download and install
-
-Download the signed [Skywright v1.4 APK](https://github.com/ColeT25/Skywright/releases/download/v1.4/Skywright-v1.4.apk) on an Android phone running Android 8.0 or newer. Open the downloaded file and allow installation from that source if Android asks. The APK installs directly; it does not require a Play Store account or an internet connection to play. Version 1.4 uses the same signing key as earlier releases, so it can install as an update.
-
-SHA-256: `5ed235cabf583ff64843d483cadcd947af42aba983d6438804ea78e3673f42ac`
+Open `http://localhost:8000/`. Press Escape or use the pause button to pause. The browser saves your best score and settings. On HTTPS or localhost, the game can be played offline after the service worker caches it.
 
 ## How to play
 
@@ -39,27 +25,34 @@ SHA-256: `5ed235cabf583ff64843d483cadcd947af42aba983d6438804ea78e3673f42ac`
 - Survive five minutes of active play to raise the sun fully and win. A collision ends the current run and restarts the sunrise on the next attempt.
 - Tap the pause icon in the top-right corner during a run. Sound and vibration switches are on the menu, pause, and result screens. Best score and settings stay on the device.
 
-![Skywright gameplay on a tall Android screen](docs/responsive-gameplay-v1.4.png)
+## Quality checks
 
-## Build from source
-
-This is a native Kotlin Android project with original Canvas artwork, a fixed-step simulation, and no external game engine or runtime permissions. The Gradle wrapper is included. With Android SDK Platform 36, Build Tools 36.0.0, and Java 17 installed:
+GitHub Actions runs the checks on pull requests and pushes to `main`. To run the same checks locally:
 
 ```sh
-bash ./gradlew testDebugUnitTest lintRelease assembleDebug
+npm --prefix web ci
+npm --prefix web run format:check
+bash ./gradlew -p web --warning-mode fail spotlessCheck jsBrowserDistribution
+npm --prefix web run test:coverage
+npm --prefix web exec -- playwright install chromium
+npm --prefix web run test:browser
 ```
 
-The signed release APK was built locally with a project-specific signing key. The key is intentionally outside this repository. See [GAME_PLAN.md](GAME_PLAN.md) for the original game concept and [RELEASE_NOTES_v1.4.md](RELEASE_NOTES_v1.4.md) for the latest tuning.
+Use `bash ./gradlew -p web spotlessApply` to format Kotlin and `npm --prefix web run format` to format the handwritten web files. Kotlin compilation enables progressive mode and treats warnings as errors.
 
-## Verification for v1.4
+The Node tests must cover at least 95% of lines in each of `GameCore.kt` and `ScreenLayout.kt`. The coverage check verifies that the JavaScript execution maps back to both Kotlin files and writes the report to `web/build/coverage/report/index.html`. Browser tests check keyboard and touch controls, pause and resume, and an offline reload.
 
-- Core simulation tests cover target-centered openings, glide speed, wind direction and spacing, shooting, collision, pause cancellation, a guided five-minute route that encounters gusts, and screen mapping at tall and short aspect ratios.
-- Android build, lint, APK alignment, signature, and emulator checks are recorded in the [v1.4 release notes](RELEASE_NOTES_v1.4.md). Physical phone play testing remains to be done.
+## Deploy
+
+Configure Cloudflare Git builds from the repository root with `bash web/build-cloudflare.sh`. It verifies the pinned Eclipse Temurin JDK archive and builds to `web/build/site`. For a Worker, point Wrangler's `--assets` flag at that directory. For Pages, use it as the build output directory. [Cloudflare Workers static assets](https://developers.cloudflare.com/workers/static-assets/) · [Cloudflare Pages Git integration](https://developers.cloudflare.com/pages/get-started/git-integration/)
 
 ## Project structure
 
-- `GameCore.kt`: Android-free physics, pulse targeting, wind gusts, wall state, collision, and scoring.
-- `SkywrightView.kt`: touch input, fixed-step frame pacing, lifecycle pause, and settings.
-- `ScreenLayout.kt`: responsive canvas and touch coordinate mapping.
-- `Renderer.kt`: original paper-sky visuals drawn with Canvas.
-- `GameAudio.kt`: local synthesized feedback.
+- `web/src/jsMain/kotlin/` contains the game simulation, layout, renderer, audio, and browser input.
+- `web/src/jsMain/resources/` contains the static page, icons, and offline service worker.
+- `web/src/jsTest/kotlin/` contains the Kotlin game and layout tests.
+- `web/tests/` contains the Playwright browser tests.
+
+## Archived Android releases
+
+The current project builds for browsers. The last Android APK is [Skywright v1.4](https://github.com/ColeT25/Skywright/releases/tag/v1.4). Earlier APKs are in the [release archive](https://github.com/ColeT25/Skywright/releases).
