@@ -11,11 +11,15 @@ class GameCoreTest {
     @Test fun quickTapFlapsWithoutFiring() {
         val game = GameCore()
         game.start()
+        repeat(24) { game.update(1f / 60f) }
+        assertTrue(game.birdVy > 0f)
+        game.events.clear()
         game.beginPress()
         game.endPress(0.1f)
         assertTrue(game.pulses.isEmpty())
         assertEquals(0f, game.shotCooldown, 0.001f)
-        assertTrue(GameEvent.FLAP in game.events)
+        assertEquals(GameCore.FLAP_SPEED, game.birdVy)
+        assertEquals(listOf(GameEvent.FLAP), game.events)
     }
 
     @Test fun releaseFiresAtCurrentHeightButOpensAtTargetCenter() {
@@ -183,6 +187,30 @@ class GameCoreTest {
         repeat(3) { game.update(1f / 60f) }
         assertEquals(GamePhase.PLAYING, game.phase)
         assertEquals(1, game.score)
+    }
+
+    @Test fun restartResetsTheRunAndKeepsTheBestScore() {
+        val game = GameCore()
+        game.start()
+        game.walls.first().x = 20f
+        game.walls.first().gapCenter = 350f
+        game.update(1f / 60f)
+        game.walls[1].x = GameCore.BIRD_X
+        game.update(1f / 60f)
+        assertEquals(GamePhase.OVER, game.phase)
+        assertEquals(1, game.score)
+        assertEquals(1, game.best)
+        assertTrue(game.elapsed > 0f)
+
+        game.restart()
+
+        assertEquals(GamePhase.PLAYING, game.phase)
+        assertEquals(0, game.score)
+        assertEquals(1, game.best)
+        assertEquals(0f, game.elapsed)
+        assertEquals(listOf(340f, 740f, 1140f), game.walls.map { it.x })
+        assertTrue(game.walls.all { it.gapCenter == null && !it.scored })
+        assertEquals(listOf(GameEvent.FLAP), game.events)
     }
 
     @Test fun solidWallKillsAndPauseFreezesSimulation() {

@@ -1,5 +1,25 @@
 import { expect, test } from "@playwright/test";
 
+async function startWithHeldSpace(page) {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:01:00Z"));
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Play", exact: true }),
+  ).toBeEnabled();
+  await page.keyboard.down("Space");
+  await page.clock.runFor(240);
+}
+
+async function flyTowardFirstWall(page) {
+  // Keep the moth near the opening until it reaches the wall.
+  await page.clock.runFor(430);
+  for (let flap = 0; flap < 3; flap++) {
+    await page.keyboard.press("Space");
+    await page.clock.runFor(640);
+  }
+}
+
 test("starts, pauses, and resumes with the keyboard", async ({ page }) => {
   await page.goto("/");
   await expect(
@@ -12,6 +32,53 @@ test("starts, pauses, and resumes with the keyboard", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Paused" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
+});
+
+test("opens the first wall, scores, and starts a fresh run", async ({
+  page,
+}) => {
+  await startWithHeldSpace(page);
+  await page.keyboard.up("Space");
+  await flyTowardFirstWall(page);
+  await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
+
+  await page.keyboard.press("Space");
+  await page.clock.runFor(2240);
+  await expect(page.getByRole("heading", { name: "Sky closed" })).toBeVisible();
+  await expect(page.locator("#score")).toHaveText("1");
+  await expect(page.locator("#details")).toContainText("Best 1");
+  await page.getByRole("button", { name: "Fly again" }).press("Enter");
+  await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
+
+  await page.clock.runFor(1600);
+  await expect(page.getByRole("heading", { name: "Sky closed" })).toBeVisible();
+  await expect(page.locator("#score")).toHaveText("0");
+  await expect(page.locator("#details")).toContainText("Best 1");
+});
+
+test("pausing during a hold cancels the shot after resuming", async ({
+  page,
+}) => {
+  await startWithHeldSpace(page);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Paused" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#game")).toHaveAttribute("data-phase", "playing");
+  await page.keyboard.up("Space");
+
+  await flyTowardFirstWall(page);
+  await expect(page.getByRole("heading", { name: "Sky closed" })).toBeVisible();
+  await expect(page.locator("#score")).toHaveText("0");
+});
+
+test("remembers the sound setting after reload", async ({ page }) => {
+  await page.goto("/");
+  const sound = page.getByRole("button", { name: "Sound" });
+  await expect(sound).toHaveAttribute("aria-pressed", "true");
+  await sound.click();
+  await expect(sound).toHaveAttribute("aria-pressed", "false");
+  await page.reload();
+  await expect(sound).toHaveAttribute("aria-pressed", "false");
 });
 
 test.describe("phone viewport", () => {
