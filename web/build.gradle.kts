@@ -6,7 +6,7 @@ import org.jetbrains.kotlin.gradle.tasks.Kotlin2JsCompile
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
-    kotlin("multiplatform") version "2.0.21"
+    kotlin("multiplatform") version "2.4.21"
     id("com.diffplug.spotless") version "7.2.1"
 }
 
@@ -30,7 +30,7 @@ kotlin {
     sourceSets {
         jsMain {
             dependencies {
-                implementation("org.jetbrains.kotlin:kotlin-dom-api-compat:2.0.21")
+                implementation("org.jetbrains.kotlin:kotlin-dom-api-compat:2.4.21")
             }
         }
         jsTest {
